@@ -11,6 +11,10 @@ from omegaconf import DictConfig
 from src.acestep_artifact_diffusion import bind_generate_audio_patch
 from src.artifact_bundle import GenerationArtifactPayload
 
+# ACE-Step: для тишины длина VAE-латента ≈ duration_sec * (sample_rate / 1920) == duration_sec * 25;
+# затем max(128, …). При T>=128 совпадает с noise.shape[1], если audio_duration = T/25.
+_LATENT_FRAMES_PER_AUDIO_SECOND = 25.0
+
 
 def generate_music_kwargs_from_cfg(cfg: DictConfig) -> dict[str, Any]:
     """Маппинг структуры generate-конфига в kwargs ``AceStepHandler.generate_music``."""
@@ -73,6 +77,15 @@ def run_generate(
         )
 
     kwargs = generate_music_kwargs_from_cfg(work_cfg)
+    if payload.noise is not None:
+        t_noise = int(payload.noise.shape[1])
+        if t_noise < 128:
+            raise ValueError(
+                f"Artifact noise time dimension {t_noise} < 128: в ACE-Step короткие клипы "
+                "дополняются до 128 латентных кадров — задайте в артефакте T >= 128 или другой шум."
+            )
+        kwargs["audio_duration"] = t_noise / _LATENT_FRAMES_PER_AUDIO_SECOND
+
     model = handler.model
 
     null_list = payload.null_encoder_hidden_states_per_step

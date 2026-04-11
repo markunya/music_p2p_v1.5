@@ -22,6 +22,11 @@ class PromptConfig:
 
 
 @dataclass
+class ArtifactRefConfig:
+    path: str | None = None
+
+
+@dataclass
 class GenerateConfig:
     """Top-level generate config; composed with acestep + prompt groups."""
 
@@ -29,6 +34,7 @@ class GenerateConfig:
 
     acestep: AceStepInitConfig = MISSING
     prompt: PromptConfig = MISSING
+    artifact: ArtifactRefConfig = field(default_factory=ArtifactRefConfig)
 
     exp_name: str = "gen_run"
     save_dir: str = "_exps/gen"

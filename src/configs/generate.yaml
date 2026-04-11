@@ -23,3 +23,7 @@ sampler_mode: euler
 use_adg: false
 cfg_interval_start: 0.0
 cfg_interval_end: 1.0
+
+# Если задан путь — подставляется cfg из артефакта (ключ ``cfg``) и опционально фиксированный шум.
+artifact:
+  path: null

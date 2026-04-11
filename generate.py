@@ -1,4 +1,4 @@
-"""Text-to-music generation via ACE-Step 1.5 + Hydra (scaffold)."""
+"""Text-to-music: один путь — cfg задаёт генерацию; шум из артефакта или случайный."""
 
 from __future__ import annotations
 
@@ -11,7 +11,9 @@ from omegaconf import DictConfig, OmegaConf
 
 from acestep.handler import AceStepHandler
 
+from src.artifact_bundle import load_generation_bundle
 from src.logging import utils as logging
+from src.run_generate import run_generate
 from src.utils.utils import resolve_against_original_cwd, set_random_seed, setup_exp_dir
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -29,50 +31,33 @@ def _save_wavs(audios: list, exp_dir: str) -> None:
 
 
 @hydra.main(version_base=None, config_path="src/configs", config_name="generate")
-def main(cfg: DictConfig) -> None:
-    OmegaConf.resolve(cfg)
-    if cfg.debug_mode:
-        logger.info("Resolved config:\n{}", OmegaConf.to_yaml(cfg))
+def main(cli_cfg: DictConfig) -> None:
+    OmegaConf.resolve(cli_cfg)
 
-    set_random_seed(int(cfg.seed))
+    work_cfg, artifact_payload = load_generation_bundle(cli_cfg)
+    OmegaConf.resolve(work_cfg)
 
-    project_root = resolve_against_original_cwd(str(cfg.acestep.project_root))
-    exp_dir = setup_exp_dir(cfg)
+    if work_cfg.debug_mode:
+        logger.info("Resolved work_cfg:\n{}", OmegaConf.to_yaml(work_cfg))
+
+    set_random_seed(int(work_cfg.seed))
+
+    project_root = resolve_against_original_cwd(str(work_cfg.acestep.project_root))
+    exp_dir = setup_exp_dir(work_cfg)
 
     handler = AceStepHandler()
     status, ok = handler.initialize_service(
         project_root=project_root,
-        config_path=str(cfg.acestep.config_path),
-        device=str(cfg.acestep.device),
-        use_mlx_dit=bool(cfg.acestep.use_mlx_dit),
-        offload_to_cpu=bool(cfg.acestep.offload_to_cpu),
+        config_path=str(work_cfg.acestep.config_path),
+        device=str(work_cfg.acestep.device),
+        use_mlx_dit=bool(work_cfg.acestep.use_mlx_dit),
+        offload_to_cpu=bool(work_cfg.acestep.offload_to_cpu),
     )
     if not ok:
         raise RuntimeError(f"initialize_service failed: {status}")
     logging.info(status)
 
-    audio_duration = float(cfg.duration) if float(cfg.duration) > 0 else None
-    seed_arg: str | int = -1 if bool(cfg.use_random_seed) else int(cfg.seed)
-
-    result = handler.generate_music(
-        captions=str(cfg.prompt.captions),
-        lyrics=str(cfg.prompt.lyrics),
-        vocal_language=str(cfg.vocal_language),
-        inference_steps=int(cfg.inference_steps),
-        guidance_scale=float(cfg.guidance_scale),
-        use_random_seed=bool(cfg.use_random_seed),
-        seed=seed_arg,
-        audio_duration=audio_duration,
-        batch_size=int(cfg.batch_size),
-        task_type=str(cfg.task_type),
-        shift=float(cfg.shift),
-        infer_method=str(cfg.infer_method),
-        sampler_mode=str(cfg.sampler_mode),
-        use_adg=bool(cfg.use_adg),
-        cfg_interval_start=float(cfg.cfg_interval_start),
-        cfg_interval_end=float(cfg.cfg_interval_end),
-        audio_code_string="",
-    )
+    result = run_generate(handler, work_cfg, artifact_payload)
 
     if not result.get("success"):
         raise RuntimeError(result.get("error") or result.get("status_message", "generation failed"))

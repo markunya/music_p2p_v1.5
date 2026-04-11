@@ -68,7 +68,7 @@ def run_generate(
     mlx = bool(getattr(handler, "use_mlx_dit", False)) and getattr(handler, "mlx_decoder", None) is not None
     if payload.uses_mlx_incompatible_override() and mlx:
         raise RuntimeError(
-            "Артефакт с noise / null-text по шагам / initial_latents поддерживается только с PyTorch DiT "
+            "Артефакт с noise или null-text по шагам поддерживается только с PyTorch DiT "
             "(acestep.use_mlx_dit=false)."
         )
 
@@ -76,8 +76,7 @@ def run_generate(
     model = handler.model
 
     null_list = payload.null_encoder_hidden_states_per_step
-    init_lt = payload.initial_latents
-    needs_nti_path = null_list is not None or init_lt is not None
+    needs_nti_path = null_list is not None
 
     orig_prepare_noise = None
     orig_generate_audio = None
@@ -90,7 +89,6 @@ def run_generate(
                 model,
                 orig_generate_audio,
                 null_encoder_hidden_states_per_step=null_list,
-                initial_latents=init_lt,
             )
             model.generate_audio = patched_ga
 

@@ -9,7 +9,6 @@ save_dir: _exps/gen
 seed: 1
 debug_mode: false
 
-# text2music → AceStepHandler.generate_music
 duration: -1.0
 vocal_language: en
 inference_steps: 8
@@ -24,6 +23,5 @@ use_adg: false
 cfg_interval_start: 0.0
 cfg_interval_end: 1.0
 
-# Если задан путь — подставляется cfg из артефакта (ключ ``cfg``) и опционально фиксированный шум.
 artifact:
   path: null

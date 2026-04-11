@@ -40,11 +40,12 @@ python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/ab
 | Ключ | Назначение |
 |------|------------|
 | `cfg` | обязательный снимок конфига (как у Hydra `generate`) |
-| `noise` | опционально: фиксированный тензор для `prepare_noise` (та же форма, что у DiT-шума) |
-| `null_encoder_hidden_states_per_step` | опционально: список тензоров **по одному на шаг** диффузии (CFG uncond в стиле null-text inversion) **или** один stacked tensor с ведущей осью `T == inference_steps` |
-| `initial_latents` | опционально: стартовый `xt` вместо `noise` (не сочетать с `cover_noise_strength > 0` в cfg) |
+| `noise` | опционально: фиксированный латент/шум для `prepare_noise` — с него начинается диффузия (форма как у выхода DiT `prepare_noise`) |
+| `null_encoder_hidden_states_per_step` | опционально: список тензоров **по одному на шаг** (CFG uncond, null-text inversion) **или** stacked tensor с ведущей осью `T == inference_steps` |
 
-Режимы с `noise` / null-text / `initial_latents` требуют **PyTorch DiT** (`acestep.use_mlx_dit: false`). Реализация null-text и `initial_latents` — в [`src/acestep_artifact_diffusion.py`](src/acestep_artifact_diffusion.py) (vendored-логика из upstream `generate_audio`); при обновлении пакета `acestep` этот файл нужно сверять с `modeling_acestep_v15_base.py`. Кастомные `timesteps` в этом пути не поддерживаются (используйте `inference_steps` и `shift` из cfg). Для **XL/SFT** с отличающимся `generate_audio` может понадобиться отдельная копия цикла.
+Старые файлы с ключом `initial_latents` при загрузке по-прежнему читаются: тензор подставляется как `noise`, с предупреждением `DeprecationWarning`.
+
+Режимы с `noise` или null-text требуют **PyTorch DiT** (`acestep.use_mlx_dit: false`). Null-text — в [`src/acestep_artifact_diffusion.py`](src/acestep_artifact_diffusion.py): упрощённый цикл только под **CFG** (`guidance_scale > 1`), без cover/non-cover, без repaint и без `cover_noise_strength`; при обновлении `acestep` сверять с `modeling_acestep_v15_base.py`. Кастомные `timesteps` не поддерживаются.
 
 Сохранение снимка конфига (например из инверсии или после настройки в Hydra):
 
@@ -56,9 +57,8 @@ from src.artifact_bundle import save_generation_artifact
 save_generation_artifact(
     "out.pt",
     cfg,
-    noise=noise_tensor,  # опционально
+    noise=noise_tensor,  # опционально: старт диффузии
     null_encoder_hidden_states_per_step=null_list_or_stacked,  # опционально
-    initial_latents=xt0,  # опционально
 )
 ```
 
@@ -73,6 +73,6 @@ python generate.py artifact.path=/path/to/out.pt
 - `generate.py` — загрузка bundle → `initialize_service` → `run_generate` (один путь).
 - `src/run_generate.py` — `generate_music_kwargs_from_cfg` + `run_generate` (патчи `prepare_noise` / `generate_audio`).
 - `src/artifact_bundle.py` — `load_generation_bundle` / `save_generation_artifact` / `GenerationArtifactPayload`.
-- `src/acestep_artifact_diffusion.py` — диффузия с NTI и `initial_latents` без правок установленного `acestep`.
+- `src/acestep_artifact_diffusion.py` — диффузия с NTI без правок установленного `acestep` (стартовый латент — только через `noise` + патч `prepare_noise`).
 - `src/configs/` — Hydra и группы `acestep/`, `prompt/`.
 - `src/schemas.py` — зеркало полей для типизации.

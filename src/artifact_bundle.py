@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
@@ -18,14 +19,9 @@ class GenerationArtifactPayload:
 
     noise: Optional[torch.Tensor] = None
     null_encoder_hidden_states_per_step: Optional[List[torch.Tensor]] = None
-    initial_latents: Optional[torch.Tensor] = None
 
     def uses_mlx_incompatible_override(self) -> bool:
-        return (
-            self.noise is not None
-            or self.null_encoder_hidden_states_per_step is not None
-            or self.initial_latents is not None
-        )
+        return self.noise is not None or self.null_encoder_hidden_states_per_step is not None
 
 
 def save_generation_artifact(
@@ -34,7 +30,6 @@ def save_generation_artifact(
     *,
     noise: torch.Tensor | None = None,
     null_encoder_hidden_states_per_step: list[torch.Tensor] | torch.Tensor | None = None,
-    initial_latents: torch.Tensor | None = None,
 ) -> None:
     """Сохранить ``cfg`` (plain dict без ``hydra``) и опциональные тензоры."""
     path = Path(path)
@@ -52,8 +47,6 @@ def save_generation_artifact(
             bundle["null_encoder_hidden_states_per_step"] = [
                 t.detach().cpu() for t in null_encoder_hidden_states_per_step
             ]
-    if initial_latents is not None:
-        bundle["initial_latents"] = initial_latents.detach().cpu()
     torch.save(bundle, path)
 
 
@@ -68,7 +61,8 @@ def _optional_noise(data: dict[str, Any]) -> torch.Tensor | None:
     return t
 
 
-def _optional_initial_latents(data: dict[str, Any]) -> torch.Tensor | None:
+def _legacy_initial_latents_as_noise(data: dict[str, Any]) -> torch.Tensor | None:
+    """Старые артефакты с ключом ``initial_latents`` — трактуем как ``noise``."""
     if "initial_latents" not in data:
         return None
     t = data["initial_latents"]
@@ -76,6 +70,11 @@ def _optional_initial_latents(data: dict[str, Any]) -> torch.Tensor | None:
         return None
     if not isinstance(t, torch.Tensor):
         raise TypeError(f"artifact['initial_latents'] must be torch.Tensor, got {type(t)}")
+    warnings.warn(
+        "Ключ артефакта 'initial_latents' устарел; сохраняйте тот же тензор под ключом 'noise'.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
     return t
 
 
@@ -121,9 +120,12 @@ def load_generation_bundle(cli_cfg: DictConfig) -> tuple[DictConfig, GenerationA
         )
 
     work_cfg = OmegaConf.create(bundle["cfg"])
+    noise = _optional_noise(bundle)
+    if noise is None:
+        noise = _legacy_initial_latents_as_noise(bundle)
+
     payload = GenerationArtifactPayload(
-        noise=_optional_noise(bundle),
+        noise=noise,
         null_encoder_hidden_states_per_step=_optional_null_per_step(bundle),
-        initial_latents=_optional_initial_latents(bundle),
     )
     return work_cfg, payload

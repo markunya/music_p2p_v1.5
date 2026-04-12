@@ -1,0 +1,4 @@
+project_name: music-p2p
+workspace: null
+run_name: ${exp_name}
+mode: Online

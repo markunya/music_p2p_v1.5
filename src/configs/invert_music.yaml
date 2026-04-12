@@ -1,0 +1,17 @@
+defaults:
+  - generate
+  - writer: default
+  - _self_
+
+# Path to the audio clip to invert (stereo/mono; normalized like target audio in ACE-Step).
+music_path: ???
+
+nti_learning_rate: 1.0e-2
+nti_num_inner_steps: 15
+nti_epsilon: 1.0e-7
+
+# Written under Hydra output dir unless absolute.
+artifact_out: inverted_artifact.pt
+
+exp_name: invert_run
+save_dir: _exps/invert

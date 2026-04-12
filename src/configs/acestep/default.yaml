@@ -1,6 +1,7 @@
 # Paths are resolved relative to the repo cwd (Hydra original cwd), not Hydra output dir.
 project_root: ../ACE-Step-1.5
-config_path: acestep-v15-turbo
+# Base model: CFG / NTI / shift; turbo is faster but incompatible with guidance-scale inversion paths.
+config_path: acestep-v15-base
 use_mlx_dit: false
 device: auto
 offload_to_cpu: false

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from src.mps_adg_patch import apply_adg_mps_patch
+
+apply_adg_mps_patch()
+
 import types
+import warnings
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 from omegaconf import DictConfig
 
 from src.acestep_artifact_diffusion import bind_generate_audio_patch
@@ -52,10 +58,33 @@ def _patch_prepare_noise(model: Any, fixed: torch.Tensor) -> Any:
         if x.dim() == 2:
             x = x.unsqueeze(0)
         if x.shape != exp_shape:
-            raise ValueError(
-                f"Artifact noise shape {tuple(x.shape)} != DiT expected {exp_shape} "
-                f"(from context_latents {tuple(context_latents.shape)})"
-            )
+            if (
+                x.shape[0] == b
+                and x.shape[2] == expected_c
+                and abs(x.shape[1] - t) == 1
+            ):
+                t_x = int(x.shape[1])
+                if t_x > t:
+                    warnings.warn(
+                        f"Artifact noise time T={t_x} trimmed to DiT T={t} (duration→latent "
+                        f"rounding vs T/25 mismatch).",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    x = x[:, :t, :].contiguous()
+                else:
+                    pad_t = t - t_x
+                    warnings.warn(
+                        f"Artifact noise time T={t_x} padded to DiT T={t} (zero tail).",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    x = F.pad(x, (0, 0, 0, pad_t))
+            else:
+                raise ValueError(
+                    f"Artifact noise shape {tuple(x.shape)} != DiT expected {exp_shape} "
+                    f"(from context_latents {tuple(context_latents.shape)})"
+                )
         return x.to(device=context_latents.device, dtype=context_latents.dtype)
 
     model.prepare_noise = types.MethodType(patched, model)

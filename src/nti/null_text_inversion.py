@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from src.mps_adg_patch import apply_adg_mps_patch
+
+apply_adg_mps_patch()
+
+from typing import Any, Dict, List, Literal
 
 import torch
 import torch.nn.functional as F
-from torch.optim import AdamW
+from torch.optim import Adam
 from tqdm import tqdm
 from transformers.cache_utils import DynamicCache, EncoderDecoderCache
 
@@ -15,6 +19,63 @@ from acestep.models.base.apg_guidance import MomentumBuffer, adg_forward, apg_fo
 from src.logging import utils as logging
 from src.logging.writer import BaseWriter, DummyWriter
 from src.nti.schedule import acestep_sigma_grid
+
+NtiLatentIntegrator = Literal["euler", "heun"]
+
+
+def _dt_tensor(dt: torch.Tensor, bsz: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    return dt * torch.ones((bsz,), device=device, dtype=dtype).view(-1, 1, 1)
+
+
+def _predict_latent_cfg_step(
+    model: torch.nn.Module,
+    latent_cur: torch.Tensor,
+    t_curr: torch.Tensor,
+    t_prev: torch.Tensor,
+    null_emb: torch.Tensor,
+    dt_tensor: torch.Tensor,
+    enc_hs_cond: torch.Tensor,
+    enc_mask_cond: torch.Tensor,
+    context_latents: torch.Tensor,
+    attention_mask: torch.Tensor,
+    *,
+    diffusion_guidance_scale: float,
+    use_adg: bool,
+    integrator: NtiLatentIntegrator,
+) -> torch.Tensor:
+    """One cond+CFG velocity step along decreasing ``σ``: ``t_curr`` → ``t_prev`` (``dt = t_curr - t_prev`` > 0)."""
+    vt1 = _decoder_velocity_cfg_trainable_null(
+        model,
+        latent_cur,
+        t_curr,
+        enc_hs_cond,
+        null_emb,
+        enc_mask_cond,
+        context_latents,
+        attention_mask,
+        diffusion_guidance_scale=diffusion_guidance_scale,
+        use_adg=use_adg,
+        apply_cfg_guidance=True,
+        momentum_buffer=MomentumBuffer(),
+    )
+    if integrator == "euler":
+        return latent_cur - vt1 * dt_tensor
+    lat_e = latent_cur - vt1 * dt_tensor
+    vt2 = _decoder_velocity_cfg_trainable_null(
+        model,
+        lat_e,
+        t_prev,
+        enc_hs_cond,
+        null_emb,
+        enc_mask_cond,
+        context_latents,
+        attention_mask,
+        diffusion_guidance_scale=diffusion_guidance_scale,
+        use_adg=use_adg,
+        apply_cfg_guidance=True,
+        momentum_buffer=MomentumBuffer(),
+    )
+    return latent_cur - 0.5 * (vt1 + vt2) * dt_tensor
 
 
 def _prepare_condition_tensors(
@@ -139,12 +200,15 @@ class NullTextInversionAceStep:
         lr: float = 1e-2,
         num_inner_steps: int = 15,
         epsilon: float = 1e-7,
+        latent_integrator: NtiLatentIntegrator = "euler",
         writer: BaseWriter | None = None,
         debug_mode: bool = False,
     ):
         self._lr = lr
         self._num_inner_steps = num_inner_steps
         self._epsilon = epsilon
+        assert latent_integrator in ("euler", "heun")
+        self._latent_integrator = latent_integrator
         self._writer = writer or DummyWriter()
         self._debug_mode = debug_mode
 
@@ -167,8 +231,13 @@ class NullTextInversionAceStep:
             raise ValueError(
                 f"trajectory length {len(trajectory)} != infer_steps + 1 ({infer_steps + 1})"
             )
+        if infer_steps < 1:
+            raise ValueError("NTI requires infer_steps >= 1")
         if diffusion_guidance_scale <= 1.0:
             raise ValueError("NTI requires diffusion_guidance_scale > 1.0")
+
+        # LR schedule like null-text-w-ptp: lr *= (1 - step / ref) with ref = 2 * inference_steps.
+        lr_decay_ref = 2.0 * float(infer_steps)
 
         enc_hs_cond, enc_mask_cond, context_latents, attention_mask = _prepare_condition_tensors(
             model, handler, payload
@@ -186,10 +255,15 @@ class NullTextInversionAceStep:
         null_list: List[torch.Tensor] = []
         latent_cur = trajectory[0]
         bsz = latent_cur.shape[0]
+        null_carry: torch.Tensor | None = None
 
         outer_it = range(infer_steps)
         if use_progress_bar:
-            outer_it = tqdm(outer_it, total=infer_steps, desc="Null-text inversion")
+            outer_it = tqdm(
+                outer_it,
+                total=infer_steps,
+                desc=f"Null-text inversion ({self._latent_integrator})",
+            )
 
         for step_idx in outer_it:
             t_curr, t_prev = t[step_idx], t[step_idx + 1]
@@ -214,69 +288,94 @@ class NullTextInversionAceStep:
 
             if not apply_cfg:
                 null_list.append(base_null.clone())
-                dt_tensor = dt * torch.ones((bsz,), device=device, dtype=dtype).view(-1, 1, 1)
-                latent_cur = latent_cur - vt_cond * dt_tensor
+                dt_tensor = _dt_tensor(dt, bsz, device, dtype)
+                if self._latent_integrator == "euler":
+                    latent_cur = latent_cur - vt_cond * dt_tensor
+                else:
+                    lat_e = latent_cur - vt_cond * dt_tensor
+                    vt2 = _velocity_cond_only(
+                        model,
+                        lat_e,
+                        t_prev,
+                        enc_hs_cond,
+                        enc_mask_cond,
+                        context_latents,
+                        attention_mask,
+                    )
+                    latent_cur = latent_cur - 0.5 * (vt_cond + vt2) * dt_tensor
                 continue
 
-            null_emb = base_null.clone().detach().requires_grad_(True)
-            optimizer = AdamW([null_emb], lr=self._lr, weight_decay=0.1)
+            if null_carry is not None:
+                null_emb = null_carry.clone().detach().requires_grad_(True)
+            else:
+                null_emb = base_null.clone().detach().requires_grad_(True)
 
+            step_lr = float(self._lr) * max(0.0, 1.0 - float(step_idx) / lr_decay_ref)
+            step_lr = max(step_lr, 1e-12)
+            if not isinstance(self._writer, DummyWriter):
+                self._writer.add_scalar("nti/lr", step_lr, step=step_idx)
+
+            optimizer = Adam([null_emb], lr=step_lr)
+
+            dt_tensor = _dt_tensor(dt, bsz, device, dtype)
             # ACE-Step ``MomentumBuffer`` has no ``detach()`` (unlike music_p2p). Fresh buffer
             # per inner step avoids carrying ``running_average`` across Adam steps / autograd.
-            for _ in range(self._num_inner_steps):
-                vt = _decoder_velocity_cfg_trainable_null(
+            for inner_i in range(self._num_inner_steps):
+                lat_prev = _predict_latent_cfg_step(
                     model,
                     latent_cur,
                     t_curr,
-                    enc_hs_cond,
+                    t_prev,
                     null_emb,
+                    dt_tensor,
+                    enc_hs_cond,
                     enc_mask_cond,
                     context_latents,
                     attention_mask,
                     diffusion_guidance_scale=diffusion_guidance_scale,
                     use_adg=use_adg,
-                    apply_cfg_guidance=True,
-                    momentum_buffer=MomentumBuffer(),
+                    integrator=self._latent_integrator,
                 )
-                dt_tensor = dt * torch.ones((bsz,), device=device, dtype=dtype).view(-1, 1, 1)
-                lat_prev = latent_cur - vt * dt_tensor
                 loss = F.mse_loss(lat_prev, latent_next)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                if loss.item() < self._epsilon:
+                inner_global = step_idx * self._num_inner_steps + inner_i
+                loss_f = float(loss.detach().item())
+                if not isinstance(self._writer, DummyWriter):
+                    self._writer.add_scalar("nti/inner/loss", loss_f, step=inner_global)
+                if loss_f < self._epsilon:
                     break
 
             if self._debug_mode or not isinstance(self._writer, DummyWriter):
-                loss_f = float(loss.item())
                 norm_f = float(torch.norm(null_emb.detach()).item())
                 if not isinstance(self._writer, DummyWriter):
-                    self._writer.add_scalar("nti_loss", loss_f)
-                    self._writer.add_scalar("null_emb_norm", norm_f)
+                    self._writer.add_scalar("nti/outer/loss_final", loss_f)
+                    self._writer.add_scalar("nti/outer/null_emb_norm", norm_f)
                 if self._debug_mode:
                     logging.info(
-                        f"NTI step {step_idx} nti_loss={loss_f:.6f} null_emb_norm={norm_f:.6f}"
+                        f"NTI step {step_idx} nti/outer/loss_final={loss_f:.6f} "
+                        f"nti/outer/null_emb_norm={norm_f:.6f}"
                     )
 
-            null_list.append(null_emb.detach().clone())
+            null_carry = null_emb.detach().clone()
+            null_list.append(null_carry.clone())
 
             with torch.no_grad():
-                momentum_buffer_final = MomentumBuffer()
-                vt = _decoder_velocity_cfg_trainable_null(
+                latent_cur = _predict_latent_cfg_step(
                     model,
                     latent_cur,
                     t_curr,
+                    t_prev,
+                    null_carry,
+                    dt_tensor,
                     enc_hs_cond,
-                    null_emb.detach(),
                     enc_mask_cond,
                     context_latents,
                     attention_mask,
                     diffusion_guidance_scale=diffusion_guidance_scale,
                     use_adg=use_adg,
-                    apply_cfg_guidance=True,
-                    momentum_buffer=momentum_buffer_final,
+                    integrator=self._latent_integrator,
                 )
-                dt_tensor = dt * torch.ones((bsz,), device=device, dtype=dtype).view(-1, 1, 1)
-                latent_cur = latent_cur - vt * dt_tensor
 
         return null_list

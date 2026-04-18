@@ -33,7 +33,7 @@ class BaseWriter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def add_scalar(self, scalar_name: str, scalar: float) -> None:
+    def add_scalar(self, scalar_name: str, scalar: float, *, step: int | None = None) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -45,7 +45,7 @@ class BaseWriter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def add_image(self, image_name: str, image: Any) -> None:
+    def add_image(self, image_name: str, image: Any, *, step: int | None = None) -> None:
         raise NotImplementedError
 
     def end(self) -> None:
@@ -57,7 +57,7 @@ class DummyWriter(BaseWriter):
     def set_step(self, step: int) -> None:
         pass
 
-    def add_scalar(self, scalar_name: str, scalar: float) -> None:
+    def add_scalar(self, scalar_name: str, scalar: float, *, step: int | None = None) -> None:
         pass
 
     def add_scalars(self, scalars: dict[str, float]) -> None:
@@ -66,7 +66,7 @@ class DummyWriter(BaseWriter):
     def add_audio(self, audio_name: str, audio: Any, sample_rate: int | None = None) -> None:
         pass
 
-    def add_image(self, image_name: str, image: Any) -> None:
+    def add_image(self, image_name: str, image: Any, *, step: int | None = None) -> None:
         pass
 
     def end(self) -> None:
@@ -146,19 +146,21 @@ class CometMLWriter(BaseWriter):
             self.add_scalar("steps_per_sec", (self.step - previous_step) / max(duration.total_seconds(), 1e-9))
             self.timer = datetime.now()
 
-    def add_scalar(self, scalar_name: str, scalar: float) -> None:
+    def add_scalar(self, scalar_name: str, scalar: float, *, step: int | None = None) -> None:
         v = float(scalar)
+        s = int(self.step if step is None else step)
         try:
-            self.exp.log_metric(scalar_name, v, step=self.step)
+            self.exp.log_metric(scalar_name, v, step=s)
         except TypeError:
-            self.exp.log_metrics({scalar_name: v}, step=self.step)
+            self.exp.log_metrics({scalar_name: v}, step=s)
 
     def add_scalars(self, scalars: dict[str, float]) -> None:
         for name, val in scalars.items():
             self.add_scalar(name, float(val))
 
-    def add_image(self, image_name: str, image: Any) -> None:
-        self.exp.log_image(image_data=image, name=image_name, step=self.step)
+    def add_image(self, image_name: str, image: Any, *, step: int | None = None) -> None:
+        s = int(self.step if step is None else step)
+        self.exp.log_image(image_data=image, name=image_name, step=s)
 
     def add_audio(self, audio_name: str, audio: Any, sample_rate: int | None = 48_000) -> None:
         import numpy as np

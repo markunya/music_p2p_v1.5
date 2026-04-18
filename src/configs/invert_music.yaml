@@ -9,6 +9,15 @@ music_path: ???
 nti_learning_rate: 1.0e-2
 nti_num_inner_steps: 15
 nti_epsilon: 1.0e-7
+# NTI roll-out vs pivot (cond+CFG): euler | heun (two decoder evals per latent step when CFG on).
+nti_latent_integrator: euler
+
+# Pivot inverse ODE: euler | heun (two v-eval/segment).
+pivot_integrator: euler
+
+# Comet (cfg.writer): pivot as (T,C) per diffusion step (step slider in Comet).
+log_pivot_trajectory_to_comet: true
+log_pivot_trajectory_max_edge: 4096
 
 # Written under Hydra output dir unless absolute.
 artifact_out: inverted_artifact.pt

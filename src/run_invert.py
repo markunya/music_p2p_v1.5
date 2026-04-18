@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from src.mps_adg_patch import apply_adg_mps_patch
+
+apply_adg_mps_patch()
+
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -11,9 +15,10 @@ from omegaconf import DictConfig, OmegaConf
 from src.artifact_bundle import save_generation_artifact
 from src.logging import utils as logging
 from src.logging.writer import BaseWriter, setup_writer
-from src.nti.build_pivot import build_pivot_trajectory
+from src.nti.build_pivot import PivotIntegrator, build_pivot_trajectory
 from src.nti.invert_conditioning import build_invert_payload
-from src.nti.null_text_inversion import NullTextInversionAceStep
+from src.nti.null_text_inversion import NtiLatentIntegrator, NullTextInversionAceStep
+from src.nti.pivot_trajectory_viz import log_pivot_trajectory_comet
 
 
 def run_invert(
@@ -30,12 +35,21 @@ def run_invert(
     if getattr(handler, "config", None) is not None and bool(getattr(handler.config, "is_turbo", False)):
         raise RuntimeError("Turbo checkpoints do not use CFG; NTI is not applicable (use a non-turbo config).")
 
-    infer_method = str(work_cfg.infer_method)
+    if str(work_cfg.infer_method) != "ode":
+        raise ValueError(f"invert: only infer_method='ode' is supported, got {work_cfg.infer_method!r}")
     sampler_mode = str(work_cfg.sampler_mode)
-    if infer_method != "ode":
-        raise ValueError(f"invert: only infer_method='ode' is supported, got {infer_method!r}")
     if sampler_mode != "euler":
         raise ValueError(f"invert: only sampler_mode='euler' is supported for now, got {sampler_mode!r}")
+
+    pivot_integrator = str(OmegaConf.select(work_cfg, "pivot_integrator", default="euler"))
+    if pivot_integrator not in ("euler", "heun"):
+        raise ValueError(f"invert: pivot_integrator must be 'euler' or 'heun', got {pivot_integrator!r}")
+
+    nti_latent_integrator = str(OmegaConf.select(work_cfg, "nti_latent_integrator", default="euler"))
+    if nti_latent_integrator not in ("euler", "heun"):
+        raise ValueError(
+            f"invert: nti_latent_integrator must be 'euler' or 'heun', got {nti_latent_integrator!r}"
+        )
 
     infer_steps = int(work_cfg.inference_steps)
     guidance = float(work_cfg.guidance_scale)
@@ -68,7 +82,7 @@ def run_invert(
             clean_latents=clean_latents,
             infer_steps=infer_steps,
             shift=float(work_cfg.shift),
-            infer_method=infer_method,
+            pivot_integrator=cast(PivotIntegrator, pivot_integrator),
             use_progress_bar=not bool(getattr(handler, "disable_tqdm", False)),
         )
 
@@ -76,11 +90,16 @@ def run_invert(
     track = setup_writer(work_cfg) if own_writer else writer
     debug_mode = bool(OmegaConf.select(work_cfg, "debug_mode", default=False))
 
+    if bool(OmegaConf.select(work_cfg, "log_pivot_trajectory_to_comet", default=True)):
+        max_edge = int(OmegaConf.select(work_cfg, "log_pivot_trajectory_max_edge", default=4096))
+        log_pivot_trajectory_comet(track, trajectory, max_edge=max_edge)
+
     try:
         nti = NullTextInversionAceStep(
             lr=float(work_cfg.nti_learning_rate),
             num_inner_steps=int(work_cfg.nti_num_inner_steps),
             epsilon=float(work_cfg.nti_epsilon),
+            latent_integrator=cast(NtiLatentIntegrator, nti_latent_integrator),
             writer=track,
             debug_mode=debug_mode,
         )

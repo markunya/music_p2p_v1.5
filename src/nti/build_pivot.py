@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 import torch
 from tqdm import tqdm
 from transformers.cache_utils import DynamicCache, EncoderDecoderCache
 
 from src.nti.schedule import acestep_sigma_grid
+
+PivotIntegrator = Literal["euler", "heun"]
 
 
 @torch.no_grad()
@@ -39,48 +41,61 @@ def _velocity_cond_only(
     return out[0]
 
 
-@torch.no_grad()
-def build_pivot_trajectory(
+def _segment_dt_tensor(
+    dt: torch.Tensor, bsz: int, device: torch.device, dtype: torch.dtype
+) -> torch.Tensor:
+    return dt * torch.ones((bsz,), device=device, dtype=dtype).view(-1, 1, 1)
+
+
+def _pivot_step_euler(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    *,
+    t_curr: torch.Tensor,
+    dt_tensor: torch.Tensor,
+    encoder_hidden_states: torch.Tensor,
+    encoder_attention_mask: torch.Tensor,
+    context_latents: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    v = _velocity_cond_only(
+        model, x, t_curr, encoder_hidden_states, encoder_attention_mask, context_latents, attention_mask
+    )
+    return x + v * dt_tensor
+
+
+def _pivot_step_heun(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    *,
+    t_curr: torch.Tensor,
+    t_next: torch.Tensor,
+    dt_tensor: torch.Tensor,
+    encoder_hidden_states: torch.Tensor,
+    encoder_attention_mask: torch.Tensor,
+    context_latents: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    v_lo = _velocity_cond_only(
+        model, x, t_next, encoder_hidden_states, encoder_attention_mask, context_latents, attention_mask
+    )
+    x_e = x + v_lo * dt_tensor
+    v_hi = _velocity_cond_only(
+        model, x_e, t_curr, encoder_hidden_states, encoder_attention_mask, context_latents, attention_mask
+    )
+    return x + 0.5 * (v_lo + v_hi) * dt_tensor
+
+
+def _invert_payload_prepare_condition(
     model: torch.nn.Module,
     handler: Any,
     payload: Dict[str, Any],
-    *,
-    clean_latents: torch.Tensor,
-    infer_steps: int,
-    shift: float,
-    infer_method: str = "ode",
-    use_progress_bar: bool = True,
-) -> List[torch.Tensor]:
-    """Return ``trajectory`` length ``infer_steps + 1``: ``[x_{t=1}, …, x_{t=0}]`` (noise → clean).
-
-    ``prepare_condition`` берётся из ``payload`` (как при генерации). Конец ODE — ``clean_latents``
-    (латент целевого аудио), форма как у ``payload['src_latents']``.
-
-    Inverse integration mirrors the forward Euler step ``x_{next} = x - v(x,t_{curr}) * dt``
-    with explicit approximation ``x_{curr} ≈ x_{next} + v(x_{next}, t_{curr}) * dt`` along
-    decreasing time indices (cf. ``music_p2p`` pivot + Flow-Match inverse idea).
-
-    Only ``infer_method == \"ode\"`` is supported for the pivot.
-    """
-    if infer_method != "ode":
-        raise ValueError(f"build_pivot_trajectory: only infer_method='ode' is supported, got {infer_method!r}")
-
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     src_latents = payload["src_latents"]
     device, dtype = src_latents.device, src_latents.dtype
-
-    cl = clean_latents.to(device=device, dtype=dtype)
-    if cl.shape != src_latents.shape:
-        raise ValueError(
-            f"clean_latents shape {tuple(cl.shape)} must match payload src_latents {tuple(src_latents.shape)}"
-        )
-
     attention_mask = torch.ones(
-        src_latents.shape[0],
-        src_latents.shape[1],
-        device=device,
-        dtype=dtype,
+        src_latents.shape[0], src_latents.shape[1], device=device, dtype=dtype
     )
-
     encoder_hidden_states, encoder_attention_mask, context_latents = model.prepare_condition(
         text_hidden_states=payload["text_hidden_states"],
         text_attention_mask=payload["text_attention_mask"],
@@ -96,36 +111,64 @@ def build_pivot_trajectory(
         is_covers=payload["is_covers"],
         precomputed_lm_hints_25Hz=payload["precomputed_lm_hints_25Hz"],
     )
+    return encoder_hidden_states, encoder_attention_mask, context_latents, attention_mask
 
+
+@torch.no_grad()
+def build_pivot_trajectory(
+    model: torch.nn.Module,
+    handler: Any,
+    payload: Dict[str, Any],
+    *,
+    clean_latents: torch.Tensor,
+    infer_steps: int,
+    shift: float,
+    pivot_integrator: PivotIntegrator = "euler",
+    use_progress_bar: bool = True,
+) -> List[torch.Tensor]:
+    """Trajectory length ``infer_steps + 1``: noise-like → … → clean (same indexing as cond-only forward).
+
+    Integrates ``dx/dσ = v(x, σ)`` from ``σ≈0`` (``clean_latents``) toward ``σ≈1`` on ``acestep_sigma_grid``.
+    ``pivot_integrator``: ``euler`` (one ``v`` eval per segment, velocity at ``t[i]``) or ``heun`` (two evals).
+    """
+    assert pivot_integrator in ("euler", "heun")
+
+    src = payload["src_latents"]
+    device, dtype = src.device, src.dtype
+    bsz = src.shape[0]
+    cl = clean_latents.to(device=device, dtype=dtype)
+    if cl.shape != src.shape:
+        raise ValueError(f"clean_latents {tuple(cl.shape)} must match src_latents {tuple(src.shape)}")
+
+    enc_hs, enc_mask, ctx_lat, attn_mask = _invert_payload_prepare_condition(model, handler, payload)
     t = acestep_sigma_grid(infer_steps, shift, device=device, dtype=dtype)
 
     x = cl.detach().clone()
-    back_states: List[torch.Tensor] = [x.clone()]
-
+    back: List[torch.Tensor] = [x.clone()]
     indices = range(infer_steps - 1, -1, -1)
     if use_progress_bar:
-        indices = tqdm(indices, total=infer_steps, desc="Pivot (inverse ODE)")
+        indices = tqdm(indices, total=infer_steps, desc=f"Pivot ({pivot_integrator})")
 
     for i in indices:
-        t_curr = t[i]
-        t_next = t[i + 1]
+        t_curr, t_next = t[i], t[i + 1]
         dt = t_curr - t_next
         if dt.abs() < 1e-12:
             continue
-        v = _velocity_cond_only(
-            model,
-            x,
-            t_curr,
-            encoder_hidden_states,
-            encoder_attention_mask,
-            context_latents,
-            attention_mask,
-        )
-        dt_tensor = dt * torch.ones((x.shape[0],), device=device, dtype=dtype).view(-1, 1, 1)
-        x = x + v * dt_tensor
-        back_states.append(x.detach().clone())
+        dt_t = _segment_dt_tensor(dt, bsz, device, dtype)
+        if pivot_integrator == "euler":
+            x = _pivot_step_euler(
+                model, x, t_curr=t_curr, dt_tensor=dt_t,
+                encoder_hidden_states=enc_hs, encoder_attention_mask=enc_mask,
+                context_latents=ctx_lat, attention_mask=attn_mask,
+            )
+        else:
+            x = _pivot_step_heun(
+                model, x, t_curr=t_curr, t_next=t_next, dt_tensor=dt_t,
+                encoder_hidden_states=enc_hs, encoder_attention_mask=enc_mask,
+                context_latents=ctx_lat, attention_mask=attn_mask,
+            )
+        back.append(x.detach().clone())
 
-    trajectory = list(reversed(back_states))
-    if len(trajectory) != infer_steps + 1:
-        raise RuntimeError(f"internal: expected {infer_steps + 1} pivot states, got {len(trajectory)}")
-    return trajectory
+    traj = list(reversed(back))
+    assert len(traj) == infer_steps + 1
+    return traj

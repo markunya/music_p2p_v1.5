@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from src.mps_adg_patch import apply_adg_mps_patch
+
+apply_adg_mps_patch()
+
 import warnings
 from pathlib import Path
 

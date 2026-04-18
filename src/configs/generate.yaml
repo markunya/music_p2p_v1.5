@@ -11,7 +11,7 @@ debug_mode: false
 
 duration: -1.0
 vocal_language: en
-inference_steps: 8
+inference_steps: 10
 guidance_scale: 7.0
 use_random_seed: false
 batch_size: 1

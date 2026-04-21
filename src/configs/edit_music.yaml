@@ -1,15 +1,8 @@
 defaults:
-  - generate
-  - writer: default
+  - invert_music
   - prompt@p2p_task.src: her_majesty
-  - prompt@p2p_task.tgt: her_majesty_edited
+  - prompt@p2p_task.tgt: her_majesty_female
   - _self_
 
 exp_name: p2p_edit_run
 save_dir: _exps/p2p_edit
-
-p2p_task:
-  vocal_language: en
-
-source_audio_path: null
-artifact_path: null

@@ -232,3 +232,24 @@ def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[Pro
         vocal_language=str(d.get("vocal_language", "en")),
     )
     return [PromptConfig(captions=base.captions, lyrics=base.lyrics, vocal_language=base.vocal_language) for _ in range(batch_size)]
+
+
+def prompt_config_from_hydra_node(prompt_node: Any) -> PromptConfig:
+    """Single ``PromptConfig`` from a Hydra prompt subnode (e.g. ``cfg.p2p_task.src``)."""
+    d = OmegaConf.to_container(prompt_node, resolve=True)
+    if not isinstance(d, dict):
+        raise TypeError("prompt node must resolve to a dict")
+    return PromptConfig(
+        captions=str(d.get("captions", "")),
+        lyrics=str(d.get("lyrics", "")),
+        vocal_language=str(d.get("vocal_language", "en")),
+    )
+
+
+def p2p_src_tgt_prompt_configs(p2p_task_cfg: Any) -> List[PromptConfig]:
+    """``[src, tgt]`` from Hydra ``p2p_task`` (nodes ``src`` / ``tgt`` from ``prompt@p2p_task.*``)."""
+    src = OmegaConf.select(p2p_task_cfg, "src", default=None)
+    tgt = OmegaConf.select(p2p_task_cfg, "tgt", default=None)
+    if src is None or tgt is None:
+        raise ValueError("p2p_task must contain src and tgt prompt nodes (use prompt@p2p_task.src / prompt@p2p_task.tgt in defaults)")
+    return [prompt_config_from_hydra_node(src), prompt_config_from_hydra_node(tgt)]

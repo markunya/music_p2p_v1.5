@@ -5,7 +5,7 @@ from typing import Any
 import torch
 from hydra.utils import instantiate
 from loguru import logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 
 from src.inversion.artifact import InversionArtifact
@@ -15,9 +15,14 @@ from src.utils.conditioning import ModelCondition
 
 
 class InversionPipeline:
+    """Backward ODE; stepper from ``cfg.invert_stepper`` (Hydra: ``stepper@invert_stepper: …``), else ``cfg.stepper``."""
+
     def __init__(self, cfg: DictConfig) -> None:
         self._cfg = cfg
-        self._stepper: BaseStepper = instantiate(cfg.stepper)
+        stepper_cfg = OmegaConf.select(cfg, "invert_stepper", default=None)
+        if stepper_cfg is None:
+            stepper_cfg = cfg.stepper
+        self._stepper: BaseStepper = instantiate(stepper_cfg)
         self._infer_steps = int(cfg.inference_steps)
         if isinstance(self._stepper, GuidanceStepper):
             logger.warning(

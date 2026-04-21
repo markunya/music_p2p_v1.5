@@ -43,7 +43,7 @@ python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/ab
 
 ## Инверсия (Hydra)
 
-Конфиг: [`src/configs/invert_music.yaml`](src/configs/invert_music.yaml) (наследует `generate` — `seed`, `inference_steps`, `duration` и т.д. не дублируйте; группу **`stepper`** в `defaults` повторно не подключайте — иначе Hydra: «stepper appears more than once»; другой степпер только через CLI, например `stepper=heun` или `stepper=uni_heun`).
+Конфиг: [`src/configs/invert_music.yaml`](src/configs/invert_music.yaml) (наследует `generate`; в `defaults` стоит **`stepper@invert_stepper: euler`** — тот же каталог пресетов [`src/configs/stepper/`](src/configs/stepper), второй узел в дереве конфига). В CLI: **`invert_stepper=uni_heun`** для инверсии, **`stepper=...`** для форварда / `generate`. **`InversionPipeline`** берёт **`cfg.invert_stepper`**, при отсутствии — **`cfg.stepper`**.
 
 ```bash
 python invert_music.py \
@@ -57,8 +57,8 @@ python invert_music.py \
 ## Структура
 
 - `generate.py` — Hydra → `init_dit_handler` → `prepare_conditions` → **`prepare_noise` или шум из `artifact.path`** → **`ForwardPipeline`** → `tiled_decode` → WAV.
-- `invert_music.py` — `init_dit_handler` → **`prepare_conditions(..., source_stereo_wav=…)`** → **`InversionPipeline`** (``clean_latents`` из поля ``ModelCondition``) → опционально **`InversionArtifact.save`** (`artifact_out`).
-- `edit_music.py` — **`ForwardPipeline(cli_cfg).run`** с узлом Hydra **`forward`** (по умолчанию в `p2p_edit` — [`forward/edit_unified.yaml`](src/configs/forward/edit_unified.yaml) → ``UnifiedEditForwardRunner``); если задан только `source_audio_path`, сначала **`InversionPipeline(inv_cfg).run`**, затем редактирование с полученным шумом.
+- `invert_music.py` — `init_dit_handler` → **`prepare_conditions(..., source_stereo_wav=…)`** → **`InversionPipeline`** (`instantiate(cfg.invert_stepper)`, пресеты из **`stepper/`**) → опционально **`InversionArtifact.save`** (`artifact_out`).
+- `edit_music.py` — конфиг [`src/configs/edit_music.yaml`](src/configs/edit_music.yaml): **`defaults: invert_music`** + **`prompt@p2p_task.src` / `prompt@p2p_task.tgt`** (корневой **`prompt`** из `generate` может остаться в резолве, скрипт читает только **`p2p_task`**); **`music_path`** и **`artifact_out`** как у инверсии; инверсия с промптом **src**, затем **`ForwardPipeline`** с **`noise.repeat(2,1,1)`** и **[src, tgt]** → **`sample_0.wav`** / **`sample_1.wav`**.
 - `src/inversion/` — **`InversionArtifact`** (`torch.save` dict `version=1`), **`InversionPipeline`** (обратная дискретизация по сетке `t` относительно forward).
 - `src/forward/` — **`ForwardPipeline`** (`instantiate(cfg.stepper)`, цикл ODE).
 - `src/steppers/` — **Euler** / **Heun** / **`GuidanceStepper`** (обёртка над Euler или Heun); выбор через Hydra-группу `stepper`.
@@ -66,11 +66,15 @@ python invert_music.py \
 - `src/utils/conditioning.py` — **`prepare_conditions`**: батч промптов → `prepare_condition`; опционально **`source_stereo_wav`** — сетка по длине клипа и **`ModelCondition.clean_latents`** (VAE исходного трека).
 - `src/p2p/` — черновики под P2P (см. конфиги `forward/` для edit-сценариев).
 
-Смена стратегии edit (например delayed injection вместо UniEdit):
+**Edit (baseline):**
 
 ```bash
-python edit_music.py source_audio_path=../real_music/stay.mp3 forward=edit_delayed forward.alpha=0.6
+python edit_music.py \
+  acestep.project_root=/abs/path/to/ACE-Step-1.5 \
+  music_path=/abs/path/to/track.wav
 ```
 
-- `src/configs/` — Hydra: `acestep/`, `prompt/`, **`stepper/`** для `generate.py`, а также `forward/` для черновиков edit.
+Пресеты **src** / **tgt** задаются в `edit_music.yaml` (`prompt@p2p_task.*`); при необходимости не писать `.pt` инверсии: `artifact_out=null` (как у `invert_music`).
+
+- `src/configs/` — Hydra: `acestep/`, `prompt/`, **`stepper/`** (и форвард, и инверсия — второй экземпляр через **`stepper@invert_stepper`** в `invert_music`); **`edit_music.yaml`**, **`invert_music.yaml`**.
 - `src/schemas.py` — зеркало полей для типизации.

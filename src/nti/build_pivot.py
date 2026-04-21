@@ -10,7 +10,7 @@ from transformers.cache_utils import DynamicCache, EncoderDecoderCache
 
 from src.nti.schedule import acestep_sigma_grid
 
-PivotIntegrator = Literal["euler", "heun"]
+PivotIntegrator = Literal["euler", "heun", "uni_inv"]
 
 
 @torch.no_grad()
@@ -86,6 +86,27 @@ def _pivot_step_heun(
     return x + 0.5 * (v_lo + v_hi) * dt_tensor
 
 
+def _pivot_step_uni_inv(
+    model: torch.nn.Module,
+    x: torch.Tensor,
+    v_hat_prev: torch.Tensor,
+    *,
+    t_curr: torch.Tensor,
+    dt_tensor: torch.Tensor,
+    encoder_hidden_states: torch.Tensor,
+    encoder_attention_mask: torch.Tensor,
+    context_latents: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Predictor-corrector inverse step (Uni-Inv / UniEdit-Flow style; see ``uninv.md``)."""
+    z_bar = x + v_hat_prev * dt_tensor
+    v_hat = _velocity_cond_only(
+        model, z_bar, t_curr, encoder_hidden_states, encoder_attention_mask, context_latents, attention_mask
+    )
+    x_next = x + v_hat * dt_tensor
+    return x_next, v_hat
+
+
 def _invert_payload_prepare_condition(
     model: torch.nn.Module,
     handler: Any,
@@ -129,9 +150,10 @@ def build_pivot_trajectory(
     """Trajectory length ``infer_steps + 1``: noise-like → … → clean (same indexing as cond-only forward).
 
     Integrates ``dx/dσ = v(x, σ)`` from ``σ≈0`` (``clean_latents``) toward ``σ≈1`` on ``acestep_sigma_grid``.
-    ``pivot_integrator``: ``euler`` (one ``v`` eval per segment, velocity at ``t[i]``) or ``heun`` (two evals).
+    ``pivot_integrator``: ``euler`` (one ``v`` eval per segment, velocity at ``t[i]``), ``heun`` (two evals),
+    or ``uni_inv`` (predictor-corrector; carries velocity between segments).
     """
-    assert pivot_integrator in ("euler", "heun")
+    assert pivot_integrator in ("euler", "heun", "uni_inv")
 
     src = payload["src_latents"]
     device, dtype = src.device, src.dtype
@@ -145,6 +167,11 @@ def build_pivot_trajectory(
 
     x = cl.detach().clone()
     back: List[torch.Tensor] = [x.clone()]
+    v_hat_uni: torch.Tensor | None = None
+    if pivot_integrator == "uni_inv":
+        v_hat_uni = _velocity_cond_only(
+            model, x, t[infer_steps], enc_hs, enc_mask, ctx_lat, attn_mask
+        )
     indices = range(infer_steps - 1, -1, -1)
     if use_progress_bar:
         indices = tqdm(indices, total=infer_steps, desc=f"Pivot ({pivot_integrator})")
@@ -161,11 +188,24 @@ def build_pivot_trajectory(
                 encoder_hidden_states=enc_hs, encoder_attention_mask=enc_mask,
                 context_latents=ctx_lat, attention_mask=attn_mask,
             )
-        else:
+        elif pivot_integrator == "heun":
             x = _pivot_step_heun(
                 model, x, t_curr=t_curr, t_next=t_next, dt_tensor=dt_t,
                 encoder_hidden_states=enc_hs, encoder_attention_mask=enc_mask,
                 context_latents=ctx_lat, attention_mask=attn_mask,
+            )
+        else:
+            assert v_hat_uni is not None
+            x, v_hat_uni = _pivot_step_uni_inv(
+                model,
+                x,
+                v_hat_uni,
+                t_curr=t_curr,
+                dt_tensor=dt_t,
+                encoder_hidden_states=enc_hs,
+                encoder_attention_mask=enc_mask,
+                context_latents=ctx_lat,
+                attention_mask=attn_mask,
             )
         back.append(x.detach().clone())
 

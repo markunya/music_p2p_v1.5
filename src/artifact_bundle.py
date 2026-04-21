@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, List, Optional
@@ -61,23 +60,6 @@ def _optional_noise(data: dict[str, Any]) -> torch.Tensor | None:
     return t
 
 
-def _legacy_initial_latents_as_noise(data: dict[str, Any]) -> torch.Tensor | None:
-    """Старые артефакты с ключом ``initial_latents`` — трактуем как ``noise``."""
-    if "initial_latents" not in data:
-        return None
-    t = data["initial_latents"]
-    if t is None:
-        return None
-    if not isinstance(t, torch.Tensor):
-        raise TypeError(f"artifact['initial_latents'] must be torch.Tensor, got {type(t)}")
-    warnings.warn(
-        "Ключ артефакта 'initial_latents' устарел; сохраняйте тот же тензор под ключом 'noise'.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return t
-
-
 def _normalize_null_per_step(raw: Any) -> list[torch.Tensor] | None:
     if raw is None:
         return None
@@ -103,8 +85,47 @@ def _optional_null_per_step(data: dict[str, Any]) -> list[torch.Tensor] | None:
     return _normalize_null_per_step(data["null_encoder_hidden_states_per_step"])
 
 
+def _hydra_task_overrides_touch_prefix(prefix: str) -> bool:
+    """True if the Hydra CLI included a task override for this config prefix (e.g. ``prompt`` or ``prompt.captions``)."""
+    try:
+        from hydra.core.hydra_config import HydraConfig
+
+        ovr = HydraConfig.get().overrides.task
+    except (ImportError, ValueError, AttributeError):
+        return False
+    if ovr is None:
+        return False
+    starters = (
+        f"{prefix}=",
+        f"{prefix}.",
+        f"+{prefix}=",
+        f"++{prefix}=",
+        f"~{prefix}",
+    )
+    for item in ovr:
+        s = str(item).strip()
+        if any(s.startswith(st) for st in starters):
+            return True
+    return False
+
+
+def _apply_cli_task_overrides_for_artifact_work_cfg(cli_cfg: DictConfig, work_cfg: DictConfig) -> None:
+    """Подставить в ``work_cfg`` поля из ``cli_cfg``, если для них были Hydra-оверрайды в командной строке."""
+    if _hydra_task_overrides_touch_prefix("prompt"):
+        work_cfg.prompt = OmegaConf.create(OmegaConf.to_container(cli_cfg.prompt, resolve=True))
+    if _hydra_task_overrides_touch_prefix("vocal_language"):
+        work_cfg.vocal_language = cli_cfg.vocal_language
+    if _hydra_task_overrides_touch_prefix("guidance_scale"):
+        work_cfg.guidance_scale = cli_cfg.guidance_scale
+
+
 def load_generation_bundle(cli_cfg: DictConfig) -> tuple[DictConfig, GenerationArtifactPayload | None]:
-    """Без ``artifact.path`` — исходный конфиг и ``None``. Иначе — ``cfg`` из файла и payload."""
+    """Без ``artifact.path`` — исходный конфиг и ``None``. Иначе — ``cfg`` из файла и payload.
+
+    Для артефакта ``cfg`` берётся из файла; при оверрайдах в CLI подставляются из ``cli_cfg`` (см.
+    ``_apply_cli_task_overrides_for_artifact_work_cfg``): ``prompt`` / ``prompt.*``, ``vocal_language``,
+    ``guidance_scale``.
+    """
     raw_path = OmegaConf.select(cli_cfg, "artifact.path")
     if raw_path is None or str(raw_path).strip() == "":
         return cli_cfg, None
@@ -121,11 +142,10 @@ def load_generation_bundle(cli_cfg: DictConfig) -> tuple[DictConfig, GenerationA
 
     work_cfg = OmegaConf.create(bundle["cfg"])
     noise = _optional_noise(bundle)
-    if noise is None:
-        noise = _legacy_initial_latents_as_noise(bundle)
 
     payload = GenerationArtifactPayload(
         noise=noise,
         null_encoder_hidden_states_per_step=_optional_null_per_step(bundle),
     )
+    _apply_cli_task_overrides_for_artifact_work_cfg(cli_cfg, work_cfg)
     return work_cfg, payload

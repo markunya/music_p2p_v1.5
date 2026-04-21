@@ -43,9 +43,7 @@ python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/ab
 | `noise` | опционально: фиксированный латент/шум для `prepare_noise` — с него начинается диффузия (форма как у выхода DiT `prepare_noise`) |
 | `null_encoder_hidden_states_per_step` | опционально: список тензоров **по одному на шаг** (CFG uncond, null-text inversion) **или** stacked tensor с ведущей осью `T == inference_steps` |
 
-Старые файлы с ключом `initial_latents` при загрузке по-прежнему читаются: тензор подставляется как `noise`, с предупреждением `DeprecationWarning`.
-
-Режимы с `noise` или null-text требуют **PyTorch DiT** (`acestep.use_mlx_dit: false`). Null-text — в [`src/acestep_artifact_diffusion.py`](src/acestep_artifact_diffusion.py): упрощённый цикл только под **CFG** (`guidance_scale > 1`), без cover/non-cover, без repaint и без `cover_noise_strength`; при обновлении `acestep` сверять с `modeling_acestep_v15_base.py`. Кастомные `timesteps` не поддерживаются.
+Режимы с `noise` или null-text требуют **PyTorch DiT** (`acestep.use_mlx_dit: false`). Диффузия с фиксированным шумом и per-step null из артефакта идёт через **`ForwardPipeline`** → [`src/forward/plain_forward.py`](src/forward/plain_forward.py) + [`PlainCfgEulerStepper`](src/forward/steppers/plain_cfg_stepper.py) + [`diffusion_driver`](src/forward/diffusion_driver.py) (CFG при `guidance_scale > 1`). При обновлении ACE-Step имеет смысл сверять поведение с upstream `generate_audio` в `acestep/models/base/modeling_acestep_v15_base.py`. Кастомные `timesteps` не поддерживаются.
 
 Сохранение снимка конфига (например из инверсии или после настройки в Hydra):
 
@@ -70,9 +68,20 @@ python generate.py artifact.path=/path/to/out.pt
 
 ## Структура
 
-- `generate.py` — загрузка bundle → `initialize_service` → `run_generate` (один путь).
-- `src/run_generate.py` — `generate_music_kwargs_from_cfg` + `run_generate` (патчи `prepare_noise` / `generate_audio`).
+- `generate.py` — `forward_artifact_and_work_cfg` → `init_acestep_handler` → **`ForwardPipeline(work_cfg).run(...)`** → WAV.
+- `invert_music.py` — **`InversionPipeline(cfg)`** (через `run_invert`): pivot + опциональный NTI (`nti.enabled` в конфиге); **`artifact_out=null`** — только в памяти, без `.pt`.
+- `edit_music.py` — **`ForwardPipeline(cli_cfg).run`** с `forward.mode=velocity_fusion`; если задан только `source_audio_path`, сначала **`InversionPipeline(inv_cfg).run`**, затем редактирование с полученным шумом.
+- `src/inversion/` — **`InversionArtifact`** (dataclass), **`InversionPipeline`**, `run_invert` (сохранение артефакта только при не-null `artifact_out`).
+- `src/forward/` — **`ForwardPipeline`**, **`run_plain_forward`** (ODE + ``PlainCfgEulerStepper`` + ``diffusion_driver`` для CFG и per-step null из артефакта), **`VelocityFusionEditRunner`** (edit + stepper UniEdit + ``diffusion_driver``), `forward_artifact_and_work_cfg`.
+- `src/p2p/prompts.py` — **`P2PPromptPair`** из узла ``p2p_task``; раннер — ``VelocityFusionEditRunner`` ([`p2p_strategy/velocity_fusion.yaml`](src/configs/p2p_strategy/velocity_fusion.yaml): ``fusion_mode`` = ``time`` | ``spectral_time`` | ``spectral_spectral``; STFT **вдоль оси токена латента L**, не по WAV).
+
+Пример абляции edit:
+
+```bash
+python edit_music.py source_audio_path=../real_music/the-beatles-her-majesty.mp3 \
+  p2p_strategy.fusion_mode=spectral_time p2p_strategy.stft_n_fft=512
+```
+- `src/runtime/cli_bootstrap.py` — общий bootstrap handler / WAV / пути инверсии.
 - `src/artifact_bundle.py` — `load_generation_bundle` / `save_generation_artifact` / `GenerationArtifactPayload`.
-- `src/acestep_artifact_diffusion.py` — диффузия с NTI без правок установленного `acestep` (стартовый латент — только через `noise` + патч `prepare_noise`).
-- `src/configs/` — Hydra и группы `acestep/`, `prompt/`.
+- `src/configs/` — Hydra и группы `acestep/`, `prompt/`; `forward.mode` в `generate.yaml`; блок **`nti:`** только в [`invert_nti.yaml`](src/configs/invert_nti.yaml) (подключается из `invert_music` / `p2p_edit*`, не из чистого generate).
 - `src/schemas.py` — зеркало полей для типизации.

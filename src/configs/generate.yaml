@@ -23,5 +23,9 @@ use_adg: false
 cfg_interval_start: 0.0
 cfg_interval_end: 1.0
 
+# ``ForwardPipeline``: ``plain`` = text-to-music; ``velocity_fusion`` = P2P edit driver.
+forward:
+  mode: plain
+
 artifact:
   path: null

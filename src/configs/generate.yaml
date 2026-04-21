@@ -1,31 +1,21 @@
-# _self_ last so keys below override acestep/prompt groups and stay authoritative.
+# _self_ last so keys below override acestep/prompt/stepper groups and stay authoritative.
 defaults:
   - acestep: default
   - prompt: example
+  - stepper: euler
   - _self_
 
 exp_name: gen_run
 save_dir: _exps/gen
 seed: 1
+use_random_seed: false
 debug_mode: false
 
 duration: -1.0
-vocal_language: en
-inference_steps: 10
-guidance_scale: 7.0
-use_random_seed: false
+inference_steps: 50
 batch_size: 1
-task_type: text2music
-shift: 1.0
-infer_method: ode
-sampler_mode: euler
-use_adg: false
-cfg_interval_start: 0.0
-cfg_interval_end: 1.0
 
-# ``ForwardPipeline``: ``plain`` = text-to-music; ``velocity_fusion`` = P2P edit driver.
-forward:
-  mode: plain
+audio_format: wav
 
 artifact:
   path: null

@@ -21,67 +21,56 @@ pip install -r requirements.txt
 python generate.py
 ```
 
-Переопределения:
+Переопределения (путь к ACE-Step, число шагов, пресет промпта, стэппер):
 
 ```bash
-python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/abs/path/to/ACE-Step-1.5 inference_steps=50 prompt=example
+python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/abs/path/to/ACE-Step-1.5 inference_steps=50 prompt=example stepper=euler
 ```
 
-`defaults` в `src/configs/generate.yaml` ставит **`_self_` последним**, чтобы локальные поля не перетирались группами `acestep` / `prompt`.
+**Guidance (CFG / APG / ADG):** подключите группу `stepper/guidance_euler` или `stepper/guidance_heun` (или через CLI: `stepper=guidance_euler`). Параметры в [`src/configs/stepper/guidance_euler.yaml`](src/configs/stepper/guidance_euler.yaml): `guidance_scale` (> 1 включает удвоение батча), `guidance_mode` — `cfg` | `apg` | `adg`, интервал `cfg_t_start` / `cfg_t_end` по шкале времени как в цикле (`1 → 0`). Нулевое условие берётся с весов модели: `model.null_condition_emb` (как в ACE-Step XL).
+
+Поток: **`src/utils/initialization.init_dit_handler`** (только DiT, без LLM) → **`prepare_conditions`** (список промптов → батч после `prepare_condition`) → **`model.prepare_noise`** → **`ForwardPipeline`**, внутри которого **`hydra.utils.instantiate(cfg.stepper)`** (см. `src/configs/stepper/*.yaml`, поле `_target_` на класс, например `src.steppers.euler.Euler` или `src.steppers.guidance.GuidanceStepper`) → **`handler.tiled_decode`** → файлы `sample_0.wav`, … в каталоге эксперимента.
+
+Расписание диффузии по времени соответствует upstream при **`shift = 1`** (только `linspace` от 1 до 0); параметр `shift` в конфиг **не выносится**.
+
+Без **`GuidanceStepper`** на шаг делается один вызов ``decoder`` на оценку скорости; с ним — удвоенный батч `[cond, null]` и смешивание предиктов по выбранному `guidance_mode`.
+
+`defaults` в [`src/configs/generate.yaml`](src/configs/generate.yaml) ставит **`_self_` последним** и подключает группы `acestep`, `prompt`, **`stepper`**.
 
 Пути вроде `../ACE-Step-1.5` резолвятся от **исходного** cwd (до смены директории Hydra в `outputs/`).
 
-### Артефакт (тот же сценарий, что и обычная генерация)
+**Генерация из инверсии:** если задан `artifact.path`, `generate.py` подставляет `noise` из артефакта вместо `prepare_noise`. Промпт, `batch_size` и `duration` должны соответствовать инверсии (иначе ошибка уже внутри DiT / декодера).
 
-Один код-путь в `generate.py`: из **рабочего cfg** собираются kwargs для `generate_music`. Если в Hydra задан `artifact.path`, рабочий cfg берётся **целиком из файла** (`bundle["cfg"]`), иначе — это текущий merged Hydra-конфиг.
+## Инверсия (Hydra)
 
-Файл артефакта — dict, сохранённый через `torch.save`:
-
-| Ключ | Назначение |
-|------|------------|
-| `cfg` | обязательный снимок конфига (как у Hydra `generate`) |
-| `noise` | опционально: фиксированный латент/шум для `prepare_noise` — с него начинается диффузия (форма как у выхода DiT `prepare_noise`) |
-| `null_encoder_hidden_states_per_step` | опционально: список тензоров **по одному на шаг** (CFG uncond, null-text inversion) **или** stacked tensor с ведущей осью `T == inference_steps` |
-
-Режимы с `noise` или null-text требуют **PyTorch DiT** (`acestep.use_mlx_dit: false`). Диффузия с фиксированным шумом и per-step null из артефакта идёт через **`ForwardPipeline`** → [`src/forward/plain_forward.py`](src/forward/plain_forward.py) + [`PlainCfgEulerStepper`](src/forward/steppers/plain_cfg_stepper.py) + [`diffusion_driver`](src/forward/diffusion_driver.py) (CFG при `guidance_scale > 1`). При обновлении ACE-Step имеет смысл сверять поведение с upstream `generate_audio` в `acestep/models/base/modeling_acestep_v15_base.py`. Кастомные `timesteps` не поддерживаются.
-
-Сохранение снимка конфига (например из инверсии или после настройки в Hydra):
-
-```python
-from omegaconf import DictConfig
-from src.artifact_bundle import save_generation_artifact
-
-# cfg — тот же DictConfig, что в @hydra.main (save_generation_artifact уберёт узел hydra)
-save_generation_artifact(
-    "out.pt",
-    cfg,
-    noise=noise_tensor,  # опционально: старт диффузии
-    null_encoder_hidden_states_per_step=null_list_or_stacked,  # опционально
-)
-```
-
-Запуск только с указанием пути (остальное внутри `cfg` в файле):
+Конфиг: [`src/configs/invert_music.yaml`](src/configs/invert_music.yaml) (наследует `generate` — `seed`, `inference_steps`, `duration` и т.д. не дублируйте; группу **`stepper`** в `defaults` повторно не подключайте — иначе Hydra: «stepper appears more than once»; другой степпер только через CLI, например `stepper=heun` или `stepper=uni_heun`).
 
 ```bash
-python generate.py artifact.path=/path/to/out.pt
+python invert_music.py \
+  acestep.project_root=/abs/path/to/ACE-Step-1.5 \
+  music_path=/abs/path/to/track.wav \
+  artifact_out=inverted_artifact.pt
 ```
+
+- `artifact_out: null` (или CLI `artifact_out=null`) — не писать `.pt` на диск.
 
 ## Структура
 
-- `generate.py` — `forward_artifact_and_work_cfg` → `init_acestep_handler` → **`ForwardPipeline(work_cfg).run(...)`** → WAV.
-- `invert_music.py` — **`InversionPipeline(cfg)`** (через `run_invert`): pivot + опциональный NTI (`nti.enabled` в конфиге); **`artifact_out=null`** — только в памяти, без `.pt`.
-- `edit_music.py` — **`ForwardPipeline(cli_cfg).run`** с `forward.mode=velocity_fusion`; если задан только `source_audio_path`, сначала **`InversionPipeline(inv_cfg).run`**, затем редактирование с полученным шумом.
-- `src/inversion/` — **`InversionArtifact`** (dataclass), **`InversionPipeline`**, `run_invert` (сохранение артефакта только при не-null `artifact_out`).
-- `src/forward/` — **`ForwardPipeline`**, **`run_plain_forward`** (ODE + ``PlainCfgEulerStepper`` + ``diffusion_driver`` для CFG и per-step null из артефакта), **`VelocityFusionEditRunner`** (edit + stepper UniEdit + ``diffusion_driver``), `forward_artifact_and_work_cfg`.
-- `src/p2p/prompts.py` — **`P2PPromptPair`** из узла ``p2p_task``; раннер — ``VelocityFusionEditRunner`` ([`p2p_strategy/velocity_fusion.yaml`](src/configs/p2p_strategy/velocity_fusion.yaml): ``fusion_mode`` = ``time`` | ``spectral_time`` | ``spectral_spectral``; STFT **вдоль оси токена латента L**, не по WAV).
+- `generate.py` — Hydra → `init_dit_handler` → `prepare_conditions` → **`prepare_noise` или шум из `artifact.path`** → **`ForwardPipeline`** → `tiled_decode` → WAV.
+- `invert_music.py` — `init_dit_handler` → **`prepare_conditions(..., source_stereo_wav=…)`** → **`InversionPipeline`** (``clean_latents`` из поля ``ModelCondition``) → опционально **`InversionArtifact.save`** (`artifact_out`).
+- `edit_music.py` — **`ForwardPipeline(cli_cfg).run`** с узлом Hydra **`forward`** (по умолчанию в `p2p_edit` — [`forward/edit_unified.yaml`](src/configs/forward/edit_unified.yaml) → ``UnifiedEditForwardRunner``); если задан только `source_audio_path`, сначала **`InversionPipeline(inv_cfg).run`**, затем редактирование с полученным шумом.
+- `src/inversion/` — **`InversionArtifact`** (`torch.save` dict `version=1`), **`InversionPipeline`** (обратная дискретизация по сетке `t` относительно forward).
+- `src/forward/` — **`ForwardPipeline`** (`instantiate(cfg.stepper)`, цикл ODE).
+- `src/steppers/` — **Euler** / **Heun** / **`GuidanceStepper`** (обёртка над Euler или Heun); выбор через Hydra-группу `stepper`.
+- `src/utils/initialization.py` — инициализация **только** `AceStepHandler` (DiT).
+- `src/utils/conditioning.py` — **`prepare_conditions`**: батч промптов → `prepare_condition`; опционально **`source_stereo_wav`** — сетка по длине клипа и **`ModelCondition.clean_latents`** (VAE исходного трека).
+- `src/p2p/` — черновики под P2P (см. конфиги `forward/` для edit-сценариев).
 
-Пример абляции edit:
+Смена стратегии edit (например delayed injection вместо UniEdit):
 
 ```bash
-python edit_music.py source_audio_path=../real_music/the-beatles-her-majesty.mp3 \
-  p2p_strategy.fusion_mode=spectral_time p2p_strategy.stft_n_fft=512
+python edit_music.py source_audio_path=../real_music/stay.mp3 forward=edit_delayed forward.alpha=0.6
 ```
-- `src/runtime/cli_bootstrap.py` — общий bootstrap handler / WAV / пути инверсии.
-- `src/artifact_bundle.py` — `load_generation_bundle` / `save_generation_artifact` / `GenerationArtifactPayload`.
-- `src/configs/` — Hydra и группы `acestep/`, `prompt/`; `forward.mode` в `generate.yaml`; блок **`nti:`** только в [`invert_nti.yaml`](src/configs/invert_nti.yaml) (подключается из `invert_music` / `p2p_edit*`, не из чистого generate).
+
+- `src/configs/` — Hydra: `acestep/`, `prompt/`, **`stepper/`** для `generate.py`, а также `forward/` для черновиков edit.
 - `src/schemas.py` — зеркало полей для типизации.

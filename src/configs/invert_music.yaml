@@ -1,21 +1,15 @@
+# Generation params (seed, inference_steps, duration, …) come from `generate` via defaults — do not duplicate here.
 defaults:
   - generate
-  - invert_nti
   - writer: default
   - _self_
 
-# Path to the audio clip to invert (stereo/mono; normalized like target audio in ACE-Step).
-music_path: ???
-
-# Pivot inverse ODE: euler | heun | uni_inv.
-pivot_integrator: euler
-
-# Comet (cfg.writer): pivot as (T,C) per diffusion step (step slider in Comet).
-log_pivot_trajectory_to_comet: true
-log_pivot_trajectory_max_edge: 4096
-
-# Written under Hydra output dir unless absolute; set null to skip saving (in-memory only).
-artifact_out: inverted_artifact.pt
-
 exp_name: invert_run
 save_dir: _exps/invert
+
+music_path: ???
+
+artifact_out: inverted_artifact.pt
+
+log_pivot_trajectory_to_comet: false
+log_pivot_trajectory_max_edge: 4096

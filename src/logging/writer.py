@@ -1,5 +1,3 @@
-"""Comet ML (optional) и заглушка — по образцу ``music_p2p``."""
-
 from __future__ import annotations
 
 import sys
@@ -9,9 +7,8 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any
 
+from loguru import logger
 from omegaconf import DictConfig, OmegaConf
-
-from src.logging import utils as logging
 
 
 class ExperimentMode(Enum):
@@ -119,7 +116,7 @@ class CometMLWriter(BaseWriter):
             if isinstance(params, dict):
                 self.exp.log_parameters(parameters=_flatten_config_for_comet(params))
         except Exception as exc:
-            logging.info(f"Comet log_parameters пропущен: {exc}")
+            logger.info(f"Comet log_parameters пропущен: {exc}")
 
         self.step = 0
         self.timer = datetime.now()
@@ -130,7 +127,7 @@ class CometMLWriter(BaseWriter):
             pass
         url = getattr(self.exp, "url", None)
         if url:
-            logging.info(f"Comet: {url}")
+            logger.info(f"Comet: {url}")
 
     def set_step(self, step: int) -> None:
         previous_step = self.step
@@ -178,7 +175,7 @@ class CometMLWriter(BaseWriter):
                 flush()
             self.exp.end()
         except Exception as exc:
-            logging.info(f"Comet experiment.end() failed: {exc}")
+            logger.info(f"Comet experiment.end() failed: {exc}")
 
 
 def _flatten_config_for_comet(obj: Any, prefix: str = "") -> dict[str, Any]:
@@ -201,7 +198,7 @@ def _flatten_config_for_comet(obj: Any, prefix: str = "") -> dict[str, Any]:
 
 
 def _dummy_writer(reason: str) -> DummyWriter:
-    logging.info(f"Writer: DummyWriter — {reason}")
+    logger.info(f"Writer: DummyWriter — {reason}")
     return DummyWriter()
 
 
@@ -222,7 +219,7 @@ def setup_writer(cfg: DictConfig) -> BaseWriter:
     try:
         import comet_ml as _comet_check  # noqa: F401
     except ImportError as exc:
-        logging.info(
+        logger.info(
             f"comet_ml не импортируется для этого интерпретатора:\n  {sys.executable}\n"
             f"Причина: {exc!r}\n"
             "Установи пакет тем же Python (не голый «pip», если он от другой версии): "
@@ -234,9 +231,9 @@ def setup_writer(cfg: DictConfig) -> BaseWriter:
     try:
         writer = CometMLWriter(cfg)
     except Exception as exc:
-        logging.info(
+        logger.info(
             f"Comet writer init failed (python={sys.executable}): {exc!r}"
         )
         return _dummy_writer(f"ошибка инициализации Comet: {exc}")
-    logging.info("Writer: CometMLWriter (эксперимент создан)")
+    logger.info("Writer: CometMLWriter (эксперимент создан)")
     return writer

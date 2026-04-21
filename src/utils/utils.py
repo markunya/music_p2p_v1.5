@@ -5,9 +5,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from hydra.utils import get_original_cwd
+from loguru import logger
 from omegaconf import DictConfig, OmegaConf
-
-from src.logging import utils as logging
 
 
 def set_random_seed(seed: int) -> None:
@@ -26,7 +25,7 @@ def setup_exp_dir(cfg: DictConfig) -> str:
     exp_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = exp_dir / "config.yaml"
     OmegaConf.save(config=cfg, f=str(cfg_path), resolve=True)
-    logging.info(f"Experiment directory: {exp_dir}")
+    logger.info("Experiment directory: {}", exp_dir)
     return str(exp_dir)
 
 

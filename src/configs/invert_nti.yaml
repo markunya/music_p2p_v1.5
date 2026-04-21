@@ -1,7 +1,0 @@
-# Null-text inversion (только сценарии инверсии / on-the-fly invert в edit). Не подключать к чистому generate.
-nti:
-  enabled: true
-  learning_rate: 1.0e-2
-  num_inner_steps: 15
-  epsilon: 1.0e-7
-  latent_integrator: euler

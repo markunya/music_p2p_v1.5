@@ -1,4 +1,0 @@
-# Совместимость: ``--config-name=p2p_edit_velocity`` — то же, что ``p2p_edit``.
-defaults:
-  - p2p_edit
-  - _self_

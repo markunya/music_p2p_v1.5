@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import torch
 from loguru import logger
 
-from src.steppers.base import BaseStepper, StepperPayload
+from src.steppers.guidance import GuidanceStepper, StepperPayload
 from src.utils.conditioning import ModelCondition
 
 
-class UniEuler(BaseStepper):
+class UniGuidanceStepper(GuidanceStepper):
     def step(
         self,
         model: torch.nn.Module,
@@ -21,8 +23,9 @@ class UniEuler(BaseStepper):
             device=x.device,
             dtype=x.dtype,
         )
-        v_curr = self.velocity_with_side_cache(model, x, t_curr, model_condition)
+        v_curr = super().step(model, x, t_curr=t_curr, t_next=t_next, model_condition=model_condition).v
         x_corr = x - v_curr * dt
-        v_next = self.velocity_fresh_cache(model, x_corr, t_next, model_condition)
+        v_next = super().step(model, x_corr, t_curr=t_next, t_next=t_next, model_condition=model_condition).v
         x_new = x - v_next * dt
+        
         return StepperPayload(x=x_new, v=v_next)

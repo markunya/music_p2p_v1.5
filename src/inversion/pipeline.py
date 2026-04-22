@@ -24,7 +24,7 @@ class InversionPipeline:
             stepper_cfg = cfg.stepper
         self._stepper: BaseStepper = instantiate(stepper_cfg)
         self._infer_steps = int(cfg.inference_steps)
-        if isinstance(self._stepper, GuidanceStepper):
+        if type(self._stepper) is GuidanceStepper:
             logger.warning(
                 "InversionPipeline: GuidanceStepper is not recommended for inversion in v1 (2B CFG + KV); "
                 "prefer euler/heun/uni_*."
@@ -65,7 +65,7 @@ class InversionPipeline:
         *,
         clean_latents: torch.Tensor,
         model_condition: ModelCondition,
-    ) -> InversionArtifact:
+    ) -> tuple[InversionArtifact, list[torch.Tensor]]:
         model.eval()
         with torch.inference_mode():
             trajectory = self._build_inversion_trajectory(
@@ -75,9 +75,10 @@ class InversionPipeline:
             )
         noise = trajectory[-1].detach().cpu()
         stepper_name = type(self._stepper).__name__
-        return InversionArtifact(
+        artifact = InversionArtifact(
             noise=noise,
             forward_start_step_index=0,
             inference_steps=self._infer_steps,
             stepper_class_name=stepper_name,
         )
+        return artifact, trajectory

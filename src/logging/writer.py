@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -121,10 +122,6 @@ class CometMLWriter(BaseWriter):
         self.step = 0
         self.timer = datetime.now()
 
-        try:
-            self.exp.log_metric("nti/invert_started", 1.0, step=0)
-        except Exception:
-            pass
         url = getattr(self.exp, "url", None)
         if url:
             logger.info(f"Comet: {url}")
@@ -202,6 +199,9 @@ def _dummy_writer(reason: str) -> DummyWriter:
     return DummyWriter()
 
 
+_COMET_RUN_NAME_RE = re.compile(r"^(gen|edit|inv)_")
+
+
 def setup_writer(cfg: DictConfig) -> BaseWriter:
     """По ``cfg.writer``: ``null`` / отсутствует → ``DummyWriter``; иначе ``CometMLWriter``."""
     if isinstance(cfg, DictConfig) and OmegaConf.is_missing(cfg, "writer"):
@@ -216,6 +216,18 @@ def setup_writer(cfg: DictConfig) -> BaseWriter:
         return _dummy_writer(f"writer не dict, а {type(d).__name__}")
     if not d.get("project_name"):
         return _dummy_writer("writer.project_name пуст — задайте имя проекта Comet")
+    rn_raw = d.get("run_name")
+    rn = str(rn_raw).strip() if rn_raw is not None else ""
+    if not rn:
+        raise ValueError(
+            "writer.run_name is empty after resolve — set exp_name and comet_run_prefix "
+            "(e.g. comet_run_prefix: gen) so run_name becomes gen_<exp_name>."
+        )
+    if not _COMET_RUN_NAME_RE.match(rn):
+        raise ValueError(
+            f"writer.run_name must start with gen_, edit_, or inv_ (got {rn!r}); "
+            "set comet_run_prefix in the Hydra config (gen / edit / inv) or override writer.run_name."
+        )
     try:
         import comet_ml as _comet_check  # noqa: F401
     except ImportError as exc:

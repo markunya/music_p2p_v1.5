@@ -1,4 +1,4 @@
 project_name: music-p2p
 workspace: null
-run_name: ${exp_name}
+run_name: ${comet_run_prefix}_${exp_name}
 mode: Online

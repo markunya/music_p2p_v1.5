@@ -1,0 +1,61 @@
+"""False-color 2D views of latent tensors → Comet ``log_image`` (optional, heavy)."""
+
+from __future__ import annotations
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from loguru import logger
+from matplotlib import colormaps
+
+from src.logging.writer import BaseWriter, DummyWriter
+
+
+def _scalar_to_rgb_viridis(t01: np.ndarray) -> np.ndarray:
+    t01 = np.clip(t01.astype(np.float64), 0.0, 1.0)
+    rgba = colormaps["viridis"](t01)
+    return np.asarray(rgba[..., :3], dtype=np.float32)
+
+
+def _latent_matrix_falsecolor_uint8(mat: np.ndarray, *, max_edge: int) -> np.ndarray:
+    """``(H, W)`` float → min-max Viridis → ``uint8`` ``H×W×3``, optional downscale."""
+    lo, hi = float(mat.min()), float(mat.max())
+    if hi - lo < 1e-8:
+        t01 = np.zeros(mat.shape, dtype=np.float32)
+    else:
+        t01 = np.clip((mat.astype(np.float32) - lo) / (hi - lo), 0.0, 1.0)
+
+    rgb = _scalar_to_rgb_viridis(t01)
+    h, w = rgb.shape[:2]
+    if max_edge > 0 and max(h, w) > max_edge:
+        scale = max_edge / max(h, w)
+        nh = max(1, int(round(h * scale)))
+        nw = max(1, int(round(w * scale)))
+        tt = torch.from_numpy(rgb).permute(2, 0, 1).float().unsqueeze(0)
+        tt = F.interpolate(tt, size=(nh, nw), mode="bilinear", align_corners=False)
+        rgb = tt.squeeze(0).permute(1, 2, 0).clamp(0.0, 1.0).numpy()
+
+    return np.clip(rgb * 255.0 + 0.5, 0.0, 255.0).astype(np.uint8)
+
+
+def log_latent_trajectory_images(
+    writer: BaseWriter,
+    trajectory: list[torch.Tensor],
+    *,
+    prefix: str,
+    max_edge: int = 4096,
+) -> None:
+    """Log each batch item as a 2D false-color grid (channels × length), Comet ``step`` = diffusion index."""
+    if isinstance(writer, DummyWriter) or not trajectory:
+        return
+    bsz = int(trajectory[0].shape[0])
+    for s, x in enumerate(trajectory):
+        for b in range(bsz):
+            try:
+                mat = x[b].detach().float().cpu().numpy()
+                if mat.ndim != 2:
+                    mat = mat.reshape(mat.shape[0], -1)
+                rgb = _latent_matrix_falsecolor_uint8(mat, max_edge=max_edge)
+                writer.add_image(f"{prefix}/batch_{b}", rgb, step=s)
+            except Exception as exc:
+                logger.info("{}: batch_{} step_{} Comet image skipped: {}", prefix, b, s, exc)

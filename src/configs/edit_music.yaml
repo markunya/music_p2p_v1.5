@@ -4,5 +4,7 @@ defaults:
   - prompt@p2p_task.tgt: her_majesty_female
   - _self_
 
+comet_run_prefix: edit
+
 exp_name: p2p_edit_run
 save_dir: _exps/p2p_edit

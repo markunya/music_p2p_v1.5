@@ -3,7 +3,10 @@ defaults:
   - acestep: default
   - prompt: example
   - stepper: euler
+  - writer: default
   - _self_
+
+comet_run_prefix: gen
 
 exp_name: gen_run
 save_dir: _exps/gen

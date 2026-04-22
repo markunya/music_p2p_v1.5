@@ -2,9 +2,10 @@
 # Inversion ODE: same presets as `stepper/` but mounted at `invert_stepper` (no duplicate config dir).
 defaults:
   - generate
-  - writer: default
   - stepper@invert_stepper: uni_euler
   - _self_
+
+comet_run_prefix: inv
 
 exp_name: invert_run
 save_dir: _exps/invert
@@ -13,5 +14,6 @@ music_path: ???
 
 artifact_out: inverted_artifact.pt
 
-log_pivot_trajectory_to_comet: false
-log_pivot_trajectory_max_edge: 4096
+# Comet: false-color latent grids along inversion only (expensive).
+log_trajectory_images: false
+log_trajectory_max_edge: 4096

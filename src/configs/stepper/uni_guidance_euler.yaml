@@ -1,4 +1,4 @@
-_target_: src.steppers.guidance.GuidanceStepper
+_target_: src.steppers.uni_guidance.UniGuidanceStepper
 guidance_scale: 1.3
 guidance_mode: cfg
 base_stepper:

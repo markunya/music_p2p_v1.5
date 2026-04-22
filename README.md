@@ -35,9 +35,15 @@ python generate.py acestep.config_path=acestep-v15-base acestep.project_root=/ab
 
 Без **`GuidanceStepper`** на шаг делается один вызов ``decoder`` на оценку скорости; с ним — удвоенный батч `[cond, null]` и смешивание предиктов по выбранному `guidance_mode`.
 
-`defaults` в [`src/configs/generate.yaml`](src/configs/generate.yaml) ставит **`_self_` последним** и подключает группы `acestep`, `prompt`, **`stepper`**.
+`defaults` в [`src/configs/generate.yaml`](src/configs/generate.yaml) ставит **`_self_` последним** и подключает группы `acestep`, `prompt`, **`stepper`**, **`writer`**.
 
 Пути вроде `../ACE-Step-1.5` резолвятся от **исходного** cwd (до смены директории Hydra в `outputs/`).
+
+**Comet:** в `defaults` есть `writer` ([`src/configs/writer/default.yaml`](src/configs/writer/default.yaml)). Имя рана в Comet — ``run_name: ${comet_run_prefix}_${exp_name}``; в конфигах заданы `comet_run_prefix`: **`gen`** ([`generate.yaml`](src/configs/generate.yaml)), **`inv`** ([`invert_music.yaml`](src/configs/invert_music.yaml)), **`edit`** ([`edit_music.yaml`](src/configs/edit_music.yaml)). Без Comet: `writer=null`. Если Comet включён, но `run_name` после резолва не начинается с `gen_`, `edit_` или `inv_`, конфиг отвергается с `ValueError`.
+
+**Каталог эксперимента:** `setup_exp_dir` создаёт `save_dir/exp_name` только если папки ещё нет; иначе `FileExistsError` (новый запуск — новый `exp_name=...`).
+
+`generate.py` / `invert_music.py` / `edit_music.py` логируют в Comet выходные WAV (и входной трек для invert/edit), а также скалярные сводки по латентной траектории (форвард и/или инверсия). Опционально **`log_trajectory_images=true`** только для **инверсии** ([`invert_music.yaml`](src/configs/invert_music.yaml), наследует `edit`): false-color сетка латента (Viridis), **`log_trajectory_max_edge`** — даунскейл. Генерация (`generate.py`) картинки траектории не логирует.
 
 **Генерация из инверсии:** если задан `artifact.path`, `generate.py` подставляет `noise` из артефакта вместо `prepare_noise`. Промпт, `batch_size` и `duration` должны соответствовать инверсии (иначе ошибка уже внутри DiT / декодера).
 

@@ -19,10 +19,18 @@ def set_random_seed(seed: int) -> None:
 
 
 def setup_exp_dir(cfg: DictConfig) -> str:
-    """Create experiment dir under ``save_dir`` (relative to original cwd)."""
+    """Create experiment dir under ``save_dir`` (relative to original cwd).
+
+    Fails if ``exp_dir`` already exists so each run uses a fresh ``exp_name``.
+    """
     base = Path(get_original_cwd()) / str(cfg.save_dir)
     exp_dir = base / str(cfg.exp_name)
-    exp_dir.mkdir(parents=True, exist_ok=True)
+    if exp_dir.exists():
+        raise FileExistsError(
+            f"Experiment directory already exists: {exp_dir}. "
+            "Pick a new exp_name (Hydra override exp_name=...) so runs do not overwrite each other."
+        )
+    exp_dir.mkdir(parents=True, exist_ok=False)
     cfg_path = exp_dir / "config.yaml"
     OmegaConf.save(config=cfg, f=str(cfg_path), resolve=True)
     logger.info("Experiment directory: {}", exp_dir)

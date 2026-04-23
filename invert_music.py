@@ -13,7 +13,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.inversion.artifact import InversionArtifact
 from src.inversion.pipeline import InversionPipeline
-from src.logging.trajectory_logging import log_latent_trajectory, trajectory_image_flags
 from src.logging.writer import setup_writer
 from src.mps_adg_patch import apply_adg_mps_patch
 from src.utils.initialization import init_dit_handler
@@ -82,16 +81,16 @@ def main(cli_cfg: DictConfig) -> None:
     writer = setup_writer(cli_cfg)
     try:
         writer.add_audio("inv/input/source_stereo", wav, sample_rate=int(handler.sample_rate))
-        with torch.inference_mode():
+        # ``no_grad``: same as inversion — NTI must not see inference-only tensors on ``ModelCondition``.
+        with torch.no_grad():
             cond = prepare_conditions(handler, prompts, float(cli_cfg.duration), source_stereo_wav=wav)
             clean_latents = cond.clean_latents
             if clean_latents is None:
                 raise RuntimeError("prepare_conditions: expected clean_latents when source_stereo_wav is set")
-            pipe = InversionPipeline(cli_cfg)
-            artifact, inv_traj = pipe.run(model, clean_latents=clean_latents, model_condition=cond)
-
-        li, me = trajectory_image_flags(cli_cfg)
-        log_latent_trajectory(writer, inv_traj, prefix="inv/inversion_latent", log_images=li, max_edge=me)
+        pipe = InversionPipeline(cli_cfg)
+        artifact, _ = pipe.run(
+            model, clean_latents=clean_latents, model_condition=cond, writer=writer
+        )
 
         if out_path is not None:
             artifact.save(out_path)

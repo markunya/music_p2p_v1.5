@@ -60,12 +60,22 @@ python invert_music.py \
 
 - `artifact_out: null` (или CLI `artifact_out=null`) — не писать `.pt` на диск.
 
+### Null-text optimization (NTI)
+
+Конфиг-группа [`src/configs/nti/default.yaml`](src/configs/nti/default.yaml) подключается из [`invert_music.yaml`](src/configs/invert_music.yaml) как `nti`.
+
+- **`nti.enabled: true`** — после обычной инверсии запускается оптимизация «null»-эмбеддингов под **`cfg.stepper`** (обязательно **`GuidanceStepper`** с **`guidance_scale > 1`** и `model.null_condition_emb`). Инверсия по-прежнему идёт через **`invert_stepper`** (рекомендуется без guidance).
+- Поля: **`nti.lr`** (LR на внешнем шаге `j=0`), **`nti.num_inner_steps`**, **`nti.epsilon`**; LR по внешним шагам линейно снижается от `lr` к `lr/2` на последнем шаге; внутри inner-цикла LR постоянный.
+- **`InversionArtifact`** версии **2** (`torch.save`): дополнительно **`null_embeddings_per_step`** — список тензоров на каждый шаг forward. Старые артефакты **version 1** по-прежнему загружаются (`null_embeddings_per_step` будет `None`).
+- **`ForwardPipeline.run(..., inversion_artifact=...)`** — обязательный **`InversionArtifact`**: стартовый шум из **`artifact.noise`**; без файла на диске в **`generate.py`** строится **`InversionArtifact.from_noise(prepare_noise(...))`**. При **`batch_size > 1`** шум **expand** по батчу. Опционально **`null_embeddings_per_step`** для NTI.
+- Comet при NTI: метрики **`nti/loss`** и **`nti/lr_outer`** (ось шага `j * num_inner_steps + k` для loss и lr).
+
 ## Структура
 
-- `generate.py` — Hydra → `init_dit_handler` → `prepare_conditions` → **`prepare_noise` или шум из `artifact.path`** → **`ForwardPipeline`** → `tiled_decode` → WAV.
-- `invert_music.py` — `init_dit_handler` → **`prepare_conditions(..., source_stereo_wav=…)`** → **`InversionPipeline`** (`instantiate(cfg.invert_stepper)`, пресеты из **`stepper/`**) → опционально **`InversionArtifact.save`** (`artifact_out`).
-- `edit_music.py` — конфиг [`src/configs/edit_music.yaml`](src/configs/edit_music.yaml): **`defaults: invert_music`** + **`prompt@p2p_task.src` / `prompt@p2p_task.tgt`** (корневой **`prompt`** из `generate` может остаться в резолве, скрипт читает только **`p2p_task`**); **`music_path`** и **`artifact_out`** как у инверсии; инверсия с промптом **src**, затем **`ForwardPipeline`** с **`noise.repeat(2,1,1)`** и **[src, tgt]** → **`sample_0.wav`** / **`sample_1.wav`**.
-- `src/inversion/` — **`InversionArtifact`** (`torch.save` dict `version=1`), **`InversionPipeline`** (обратная дискретизация по сетке `t` относительно forward).
+- `generate.py` — … → **`ForwardPipeline`** с **`inversion_artifact`** (из **`artifact.path`** или **`InversionArtifact.from_noise`** после **`prepare_noise`**) → `tiled_decode` → WAV.
+- `invert_music.py` — `init_dit_handler` → **`prepare_conditions(..., source_stereo_wav=…)`** → **`InversionPipeline.run`** (инверсия + Comet-лог траектории **`${comet_run_prefix}/inversion_latent`**, опционально NTI) → опционально **`InversionArtifact.save`** (`artifact_out`).
+- `edit_music.py` — конфиг [`src/configs/edit_music.yaml`](src/configs/edit_music.yaml): **`defaults: invert_music`** + **`prompt@p2p_task.src` / `prompt@p2p_task.tgt`**; инверсия с промптом **src**, затем **`ForwardPipeline`** с **`inversion_artifact`** (шум и NTI-null из артефакта; батч **2** по **[src, tgt]** через expand внутри пайплайна) → **`sample_0.wav`** / **`sample_1.wav`**.
+- `src/inversion/` — **`InversionArtifact`** (`torch.save`, актуальная версия **2** с опциональными NTI-полями), **`InversionPipeline`**, **`NullTextOptimization`** (обратная дискретизация + опционально NTI).
 - `src/forward/` — **`ForwardPipeline`** (`instantiate(cfg.stepper)`, цикл ODE).
 - `src/steppers/` — **Euler** / **Heun** / **`GuidanceStepper`** (обёртка над Euler или Heun); выбор через Hydra-группу `stepper`.
 - `src/utils/initialization.py` — инициализация **только** `AceStepHandler` (DiT).

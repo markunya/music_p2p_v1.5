@@ -85,10 +85,9 @@ def main(cli_cfg: DictConfig) -> None:
     grid_duration_sec = float(wav.shape[-1]) / float(handler.sample_rate)
 
     writer = setup_writer(cli_cfg)
-    li, me = trajectory_image_flags(cli_cfg)
     try:
         writer.add_audio("edit/input/source_stereo", wav, sample_rate=int(handler.sample_rate))
-        with torch.inference_mode():
+        with torch.no_grad():
             cond_inv = prepare_conditions(
                 handler,
                 prompt_src_only,
@@ -99,25 +98,24 @@ def main(cli_cfg: DictConfig) -> None:
             if clean_latents is None:
                 raise RuntimeError("prepare_conditions: expected clean_latents when source_stereo_wav is set")
 
-            pipe_inv = InversionPipeline(cli_cfg)
-            artifact, inv_traj = pipe_inv.run(model, clean_latents=clean_latents, model_condition=cond_inv)
+        pipe_inv = InversionPipeline(cli_cfg)
+        artifact, _ = pipe_inv.run(
+            model, clean_latents=clean_latents, model_condition=cond_inv, writer=writer
+        )
 
-            log_latent_trajectory(writer, inv_traj, prefix="edit/inversion_latent", log_images=li, max_edge=me)
+        if inv_artifact_path is not None:
+            artifact.save(inv_artifact_path)
+            logger.info("Saved inversion artifact to {}", inv_artifact_path)
 
-            if inv_artifact_path is not None:
-                artifact.save(inv_artifact_path)
-                logger.info("Saved inversion artifact to {}", inv_artifact_path)
-
-            noise = artifact.noise.to(device=device, dtype=dtype)
-            noise_b2 = noise.repeat(2, 1, 1)
-
+        with torch.inference_mode():
             cond_fwd = prepare_conditions(handler, src_tgt, grid_duration_sec)
             fwd = ForwardPipeline(cli_cfg)
-            out = fwd.run(model, initial_latents=noise_b2, model_condition=cond_fwd)
+            out = fwd.run(model, model_condition=cond_fwd, inversion_artifact=artifact)
 
         fwd_traj = out.get("trajectory")
         if isinstance(fwd_traj, list) and fwd_traj:
-            log_latent_trajectory(writer, fwd_traj, prefix="edit/forward_latent")
+            li, me = trajectory_image_flags(cli_cfg)
+            log_latent_trajectory(writer, fwd_traj, prefix="edit/forward_latent", log_images=li, max_edge=me)
 
         x = out["final_latents"]
         latents_decode = x.transpose(1, 2).contiguous().to(handler.vae.dtype)

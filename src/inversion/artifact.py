@@ -6,8 +6,7 @@ from typing import Any
 
 import torch
 
-
-ARTIFACT_VERSION = 1
+ARTIFACT_VERSION = 2
 
 
 @dataclass
@@ -18,15 +17,26 @@ class InversionArtifact:
     forward_start_step_index: int = 0
     inference_steps: int = 0
     stepper_class_name: str = ""
+    null_embeddings_per_step: list[torch.Tensor] | None = None
+
+    @classmethod
+    def from_noise(cls, noise: torch.Tensor) -> "InversionArtifact":
+        """In-memory artifact with noise only (no NTI, not saved to disk)."""
+        return cls(noise=noise.detach(), null_embeddings_per_step=None)
 
     def to_state_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "version": ARTIFACT_VERSION,
             "noise": self.noise,
             "forward_start_step_index": int(self.forward_start_step_index),
             "inference_steps": int(self.inference_steps),
             "stepper_class_name": str(self.stepper_class_name),
         }
+        if self.null_embeddings_per_step is not None:
+            d["null_embeddings_per_step"] = [t.detach().cpu() for t in self.null_embeddings_per_step]
+        else:
+            d["null_embeddings_per_step"] = None
+        return d
 
     def save(self, path: Path | str) -> None:
         p = Path(path)
@@ -35,17 +45,29 @@ class InversionArtifact:
 
     @staticmethod
     def from_state_dict(data: dict[str, Any]) -> "InversionArtifact":
-        ver = int(data.get("version", 0))
-        if ver != ARTIFACT_VERSION:
-            raise ValueError(f"Unsupported artifact version {ver}, expected {ARTIFACT_VERSION}")
+        ver = int(data.get("version", 1))
+        if ver not in (1, 2):
+            raise ValueError(f"Unsupported artifact version {ver}, expected 1 or 2")
         noise = data["noise"]
         if not torch.is_tensor(noise):
             raise TypeError("artifact missing tensor 'noise'")
+        null_list: list[torch.Tensor] | None = None
+        if ver == 2:
+            raw = data.get("null_embeddings_per_step")
+            if raw is not None:
+                if not isinstance(raw, (list, tuple)):
+                    raise TypeError("null_embeddings_per_step must be a list of tensors")
+                null_list = []
+                for i, t in enumerate(raw):
+                    if not torch.is_tensor(t):
+                        raise TypeError(f"null_embeddings_per_step[{i}] is not a tensor")
+                    null_list.append(t)
         return InversionArtifact(
             noise=noise,
             forward_start_step_index=int(data.get("forward_start_step_index", 0)),
             inference_steps=int(data.get("inference_steps", 0)),
             stepper_class_name=str(data.get("stepper_class_name", "")),
+            null_embeddings_per_step=null_list,
         )
 
     @classmethod

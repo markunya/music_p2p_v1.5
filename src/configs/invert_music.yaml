@@ -3,6 +3,7 @@
 defaults:
   - generate
   - stepper@invert_stepper: uni_euler
+  - nti: default
   - _self_
 
 comet_run_prefix: inv

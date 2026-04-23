@@ -22,6 +22,17 @@ class ModelCondition:
     past_key_values: Any | None = None
     clean_latents: torch.Tensor | None = None  # set when ``prepare_conditions(..., source_stereo_wav=...)``
 
+    def clone(self) -> "ModelCondition":
+        """Tensor copy; ``past_key_values`` cleared (fresh CFG / NTI step)."""
+        return ModelCondition(
+            encoder_hidden_states=self.encoder_hidden_states.clone(),
+            encoder_attention_mask=self.encoder_attention_mask.clone(),
+            context_latents=self.context_latents.clone(),
+            attention_mask=self.attention_mask.clone(),
+            past_key_values=None,
+            clean_latents=self.clean_latents.clone() if self.clean_latents is not None else None,
+        )
+
 
 def _unpack_preprocess_tuple(processed_data: Tuple[Any, ...]) -> dict[str, Any]:
     """Mirror ``ServiceGenerateExecuteMixin._unpack_service_processed_data``."""
@@ -106,7 +117,7 @@ def _pad_latent_time(lat: torch.Tensor, target_t: int) -> torch.Tensor:
     return F.pad(lat, (0, 0, 0, pad_len))
 
 
-@torch.inference_mode()
+@torch.no_grad()
 def prepare_conditions(
     handler: Any,
     prompts: List[PromptConfig],

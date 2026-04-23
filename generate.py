@@ -62,26 +62,29 @@ def main(cli_cfg: DictConfig) -> None:
 
             if artifact_path and artifact_path.lower() not in ("null", "none", ""):
                 ap = resolve_against_original_cwd(artifact_path)
-                artifact = InversionArtifact.load(ap)
-                if artifact.inference_steps and int(artifact.inference_steps) != int(cli_cfg.inference_steps):
+                inversion_artifact = InversionArtifact.load(ap)
+                if inversion_artifact.inference_steps and int(inversion_artifact.inference_steps) != int(
+                    cli_cfg.inference_steps
+                ):
                     logger.warning(
                         "Artifact inference_steps={} != cfg inference_steps={}; continuing with cfg grid",
-                        artifact.inference_steps,
+                        inversion_artifact.inference_steps,
                         int(cli_cfg.inference_steps),
                     )
-                noise = artifact.noise.to(device=device, dtype=dtype)
                 logger.info(
                     "Loaded inversion artifact from {} (noise.shape={}, stepper={}, forward_start={})",
                     ap,
-                    tuple(noise.shape),
-                    artifact.stepper_class_name or "?",
-                    artifact.forward_start_step_index,
+                    tuple(inversion_artifact.noise.shape),
+                    inversion_artifact.stepper_class_name or "?",
+                    inversion_artifact.forward_start_step_index,
                 )
             else:
-                noise = model.prepare_noise(cond.context_latents, seed=seeds)
+                inversion_artifact = InversionArtifact.from_noise(
+                    model.prepare_noise(cond.context_latents, seed=seeds)
+                )
 
             pipe = ForwardPipeline(cli_cfg)
-            out = pipe.run(model, initial_latents=noise, model_condition=cond)
+            out = pipe.run(model, model_condition=cond, inversion_artifact=inversion_artifact)
 
         traj = out.get("trajectory")
         if isinstance(traj, list) and traj:

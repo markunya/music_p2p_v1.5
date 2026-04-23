@@ -74,10 +74,52 @@ class GuidanceStepper(BaseStepper):
         self._cfg_batch_expanded = False
         self._null_warned = False
         self._apg_buffer: MomentumBuffer | None
+        self._apg_momentum = float(apg_momentum)
         if self.guidance_mode is GuidanceMode.APG:
-            self._apg_buffer = MomentumBuffer(momentum=float(apg_momentum))
+            self._apg_buffer = MomentumBuffer(momentum=self._apg_momentum)
         else:
             self._apg_buffer = None
+        self._null_encoder_override: torch.Tensor | None = None
+
+    def set_null_encoder_override(self, emb: torch.Tensor | None) -> None:
+        """When set, the uncond half of the CFG batch uses ``emb`` (shape ``[B, …]`` as cond); ``None`` uses ``model.null_condition_emb``."""
+        self._null_encoder_override = emb
+
+    def reset_guidance_layout(self) -> None:
+        """Clear CFG batch expansion state and null override (e.g. between NTI outer steps or after forward)."""
+        self._cfg_batch_expanded = False
+        self._null_encoder_override = None
+
+    def collapse_cfg_batch_layout(self, model_condition: ModelCondition) -> None:
+        """If conditioning was expanded to ``[cond, null]``, keep only ``cond`` rows and clear KV."""
+        if not self._cfg_batch_expanded:
+            return
+        enc = model_condition.encoder_hidden_states
+        b = enc.shape[0] // 2
+        if b < 1:
+            self.reset_guidance_layout()
+            return
+        model_condition.encoder_hidden_states = enc[:b].contiguous()
+        model_condition.encoder_attention_mask = model_condition.encoder_attention_mask[:b].contiguous()
+        model_condition.context_latents = model_condition.context_latents[:b].contiguous()
+        model_condition.attention_mask = model_condition.attention_mask[:b].contiguous()
+        model_condition.past_key_values = None
+        self.reset_guidance_layout()
+
+    def reset_apg_momentum_for_nti_inner(self) -> None:
+        """Fresh APG buffer for each NTI inner iteration."""
+        if self.guidance_mode is GuidanceMode.APG:
+            self._apg_buffer = MomentumBuffer(momentum=self._apg_momentum)
+
+    @staticmethod
+    def _expand_null_to_match_cond(null_tensor: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+        if null_tensor.shape[0] == cond.shape[0]:
+            return null_tensor
+        if null_tensor.shape[0] == 1:
+            return null_tensor.expand_as(cond)
+        raise ValueError(
+            f"null encoder override batch {null_tensor.shape[0]} does not match cond batch {cond.shape[0]}"
+        )
 
     def _active_guidance(self, model: torch.nn.Module) -> bool:
         if self.guidance_scale <= 1.0:
@@ -96,21 +138,40 @@ class GuidanceStepper(BaseStepper):
     def _ensure_cfg_batch_layout(self, model: torch.nn.Module, model_condition: ModelCondition) -> bool:
         if self._cfg_batch_expanded:
             return True
-        null_emb = getattr(model, "null_condition_emb", None)
-        if null_emb is None:
+        null_emb_weight = getattr(model, "null_condition_emb", None)
+        if null_emb_weight is None:
             return False
         enc = model_condition.encoder_hidden_states
         enc_mask = model_condition.encoder_attention_mask
         ctx = model_condition.context_latents
         attn = model_condition.attention_mask
-        null = null_emb.expand_as(enc)
-        model_condition.encoder_hidden_states = torch.cat([enc, null], dim=0)
+        if self._null_encoder_override is not None:
+            null_half = self._expand_null_to_match_cond(self._null_encoder_override, enc)
+        else:
+            null_half = null_emb_weight.expand_as(enc)
+        model_condition.encoder_hidden_states = torch.cat([enc, null_half], dim=0)
         model_condition.encoder_attention_mask = torch.cat([enc_mask, enc_mask], dim=0)
         model_condition.context_latents = torch.cat([ctx, ctx], dim=0)
         model_condition.attention_mask = torch.cat([attn, attn], dim=0)
         model_condition.past_key_values = None
         self._cfg_batch_expanded = True
         return True
+
+    def _refresh_encoder_uncond_half(self, model: torch.nn.Module, model_condition: ModelCondition) -> None:
+        """Rebuild ``[cond, null]`` along batch dim when layout is already 2B (NTI / per-step null)."""
+        if not self._cfg_batch_expanded:
+            return
+        enc_full = model_condition.encoder_hidden_states
+        bsz = enc_full.shape[0] // 2
+        cond = enc_full[:bsz]
+        if self._null_encoder_override is not None:
+            null_half = self._expand_null_to_match_cond(self._null_encoder_override, cond)
+        else:
+            null_w = getattr(model, "null_condition_emb", None)
+            if null_w is None:
+                raise RuntimeError("model.null_condition_emb required for CFG layout")
+            null_half = null_w.expand_as(cond)
+        model_condition.encoder_hidden_states = torch.cat([cond, null_half], dim=0)
 
     def _guided_velocity(
         self,
@@ -205,6 +266,8 @@ class GuidanceStepper(BaseStepper):
             v2 = self.velocity_fresh_cache(model, x_pred, t_next, model_condition)
             v_avg = 0.5 * (v1 + v2)
             return StepperPayload(x=x - v_avg * dt, v=v_avg)
+
+        self._refresh_encoder_uncond_half(model, model_condition)
 
         if isinstance(self._base, Euler):
             if model_condition.past_key_values is None:

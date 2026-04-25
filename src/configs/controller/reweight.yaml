@@ -1,0 +1,4 @@
+# Cross-attn reweighting (eager, after softmax).
+# Runtime equalizer is built inside ReweightAttentionController.build from cfg.p2p_task.
+_target_: src.attention_injection.controllers.reweight.ReweightAttentionController
+reweight_strength: 1.0

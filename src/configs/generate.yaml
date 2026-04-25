@@ -3,6 +3,7 @@ defaults:
   - acestep: default
   - prompt: example
   - stepper: euler
+  - controller: dummy
   - writer: default
   - _self_
 

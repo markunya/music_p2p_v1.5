@@ -8,7 +8,7 @@ from src.utils.conditioning import ModelCondition
 class UniEditStepper(BaseStepper):
     def __init__(
         self,
-        omega: float = 5.0,
+        omega: float = 0.0,
         eps: float = 1e-8,
         do_abs: bool = False,
         mask_mode: Literal["image", "audio"] = "audio",
@@ -31,9 +31,6 @@ class UniEditStepper(BaseStepper):
             context_latents=model_condition.context_latents[start:end],
             attention_mask=model_condition.attention_mask[start:end],
             past_key_values=model_condition.past_key_values,
-            clean_latents=None
-            if model_condition.clean_latents is None
-            else model_condition.clean_latents[start:end],
         )
 
     def _minmax_per_sample(self, x: torch.Tensor) -> torch.Tensor:

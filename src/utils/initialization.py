@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+import torch
 
 from src.utils.utils import resolve_against_original_cwd
 
@@ -41,3 +42,31 @@ def init_dit_handler(cfg: "DictConfig"):
         logger.error("DiT init failed: {}", status)
         raise RuntimeError(status)
     return handler, status
+
+
+def pad_latent_time(lat: torch.Tensor, target_t: int) -> torch.Tensor:
+    """Pad or crop latent time dim ``T`` to ``target_t``. ``lat`` is ``[B, T, C]``."""
+    if lat.dim() != 3:
+        raise ValueError(f"Expected latents [B, T, C], got shape {tuple(lat.shape)}")
+    _b, t, _c = lat.shape
+    if t == target_t:
+        return lat
+    if t > target_t:
+        return lat[:, :target_t].contiguous()
+    pad_len = target_t - t
+    return torch.nn.functional.pad(lat, (0, 0, 0, pad_len))
+
+
+def encode_clean_latents(
+    handler: Any,
+    wav: torch.Tensor,
+    *,
+    target_t: int,
+    out_dtype: torch.dtype,
+) -> torch.Tensor:
+    """Encode stereo wav to latents and align temporal length with ``target_t``."""
+    wav_on_dev = wav.to(handler.device).to(handler._get_vae_dtype())
+    music_lat = handler._encode_audio_to_latents(wav_on_dev)
+    if music_lat.dim() == 2:
+        music_lat = music_lat.unsqueeze(0)
+    return pad_latent_time(music_lat, target_t).to(dtype=out_dtype)

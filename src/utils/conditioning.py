@@ -20,17 +20,14 @@ class ModelCondition:
     context_latents: torch.Tensor
     attention_mask: torch.Tensor
     past_key_values: Any | None = None
-    clean_latents: torch.Tensor | None = None  # set when ``prepare_conditions(..., source_stereo_wav=...)``
 
     def clone(self) -> "ModelCondition":
-        """Tensor copy; ``past_key_values`` cleared (fresh CFG / NTI step)."""
         return ModelCondition(
             encoder_hidden_states=self.encoder_hidden_states.clone(),
             encoder_attention_mask=self.encoder_attention_mask.clone(),
             context_latents=self.context_latents.clone(),
             attention_mask=self.attention_mask.clone(),
             past_key_values=None,
-            clean_latents=self.clean_latents.clone() if self.clean_latents is not None else None,
         )
 
 
@@ -123,15 +120,8 @@ def prepare_conditions(
     prompts: List[PromptConfig],
     duration: float,
     *,
-    source_stereo_wav: torch.Tensor | None = None,
-) -> ModelCondition:
-    """Build batched ``ModelCondition`` from prompts (B = len(prompts)).
-
-    If ``source_stereo_wav`` is set (stereo ``[2, samples]`` at handler sample rate), the temporal grid
-    uses the clip length (``samples / sample_rate``), ignoring ``duration`` for that purpose, and
-    ``clean_latents`` on the result holds VAE latents padded to match ``context_latents``. Requires
-    ``batch_size == 1`` in v1.
-    """
+    return_unpack: bool = False,
+) -> ModelCondition | tuple[ModelCondition, dict[str, Any]]:
     if not prompts:
         raise ValueError("prepare_conditions: prompts list is empty")
 
@@ -139,17 +129,6 @@ def prepare_conditions(
     captions, lyrics, vocal_languages = _prompts_to_lists(prompts)
 
     grid_duration = float(duration)
-    clean_out: torch.Tensor | None = None
-    if source_stereo_wav is not None:
-        if bsz != 1:
-            raise ValueError("prepare_conditions with source_stereo_wav: batch size 1 only in v1")
-        if source_stereo_wav.dim() != 2 or source_stereo_wav.shape[0] != 2:
-            raise ValueError(f"source_stereo_wav must be [2, T], got {tuple(source_stereo_wav.shape)}")
-        sr = float(getattr(handler, "sample_rate", 48000))
-        grid_duration = float(source_stereo_wav.shape[-1]) / sr
-        if grid_duration <= 0:
-            raise ValueError("Non-positive duration derived from source_stereo_wav")
-
     handler._ensure_silence_latent_on_device()
 
     metas: list[Any] = [None] * bsz
@@ -201,18 +180,6 @@ def prepare_conditions(
         precomputed_lm_hints_25Hz=payload.get("precomputed_lm_hints_25Hz"),
         audio_codes=None,
     )
-    if source_stereo_wav is not None:
-        target_t = int(ctx.shape[1])
-        out_dtype = ctx.dtype
-        music_on_dev = source_stereo_wav.to(handler.device).to(handler._get_vae_dtype())
-        music_lat = handler._encode_audio_to_latents(music_on_dev)
-        if music_lat.dim() == 2:
-            music_lat = music_lat.unsqueeze(0)
-        clean_out = _pad_latent_time(music_lat, target_t).to(dtype=out_dtype)
-        if clean_out.shape[0] != bsz or clean_out.shape[1] != target_t:
-            raise RuntimeError(
-                f"clean latents shape {tuple(clean_out.shape)} vs ctx {tuple(ctx.shape)}"
-            )
 
     logger.info(
         "prepare_condition: batch={}, enc_hs.shape={}, ctx.shape={}",
@@ -220,16 +187,15 @@ def prepare_conditions(
         tuple(enc_hs.shape),
         tuple(ctx.shape),
     )
-    if clean_out is not None:
-        logger.info("prepare_condition: clean_latents.shape={}", tuple(clean_out.shape))
-    return ModelCondition(
+    out = ModelCondition(
         encoder_hidden_states=enc_hs,
         encoder_attention_mask=enc_am,
         context_latents=ctx,
         attention_mask=attn,
-        past_key_values=None,
-        clean_latents=clean_out,
     )
+    if return_unpack:
+        return out, payload
+    return out
 
 
 def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[PromptConfig]:

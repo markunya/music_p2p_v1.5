@@ -42,7 +42,6 @@ class InversionPipeline:
         device = clean_latents.device
         dtype = clean_latents.dtype
         x = clean_latents.detach().clone().to(device=device, dtype=dtype)
-        model_condition.past_key_values = None
 
         t = torch.linspace(1.0, 0.0, self._infer_steps + 1, device=device, dtype=dtype)
         traj: list[torch.Tensor] = [x.detach().clone()]

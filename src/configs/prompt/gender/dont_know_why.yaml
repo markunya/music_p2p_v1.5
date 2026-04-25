@@ -1,4 +1,5 @@
-captions: "jazz pop, soft jazz, female vocal, calm, melancholic, piano, guitar, drums, intimate"
+# Только смена пола вокала (было: female)
+captions: "jazz pop, soft jazz, male vocal, calm, melancholic, piano, guitar, drums, intimate"
 lyrics: |
   I waited 'til I saw the sun
   I don't know why I didn't come

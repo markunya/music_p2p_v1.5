@@ -1,5 +1,3 @@
-"""P2P edit MVP: invert track with ``src`` prompt, then batched forward with same noise and ``[src, tgt]`` conditioning."""
-
 from __future__ import annotations
 
 import warnings
@@ -8,20 +6,23 @@ from pathlib import Path
 import hydra
 import torch
 import torchaudio
+from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
+from src.attention_injection.controllers.base import AttentionControllerBase
 from src.forward.pipeline import ForwardPipeline
 from src.inversion.pipeline import InversionPipeline
 from src.logging.trajectory_logging import log_latent_trajectory, trajectory_image_flags
 from src.logging.writer import setup_writer
 from src.mps_adg_patch import apply_adg_mps_patch
-from src.utils.initialization import init_dit_handler
+from src.utils.initialization import encode_clean_latents, init_dit_handler
 from src.utils.conditioning import (
     p2p_src_tgt_prompt_configs,
     prepare_conditions,
 )
 from src.utils.utils import resolve_against_original_cwd, set_random_seed, setup_exp_dir
+from src.attention_injection.reweight_utils import parse_reweight_from_tgt
 
 apply_adg_mps_patch()
 
@@ -74,15 +75,15 @@ def main(cli_cfg: DictConfig) -> None:
     handler, status = init_dit_handler(cli_cfg)
     logger.info("{}", status.strip())
 
-    src_tgt = p2p_src_tgt_prompt_configs(cli_cfg.p2p_task)
-    prompt_src_only = [src_tgt[0]]
+    src_raw, tgt_raw = p2p_src_tgt_prompt_configs(cli_cfg.p2p_task)
+    clean_tgt, _ = parse_reweight_from_tgt(tgt_raw)
+    src_tgt = [src_raw, clean_tgt]
 
     model = handler.model
-    device = next(model.parameters()).device
-    dtype = next(model.parameters()).dtype
 
     wav = _load_stereo_wav(music_path, target_sr=int(handler.sample_rate))
-    grid_duration_sec = float(wav.shape[-1]) / float(handler.sample_rate)
+    duration = float(wav.shape[-1]) / float(handler.sample_rate)
+    OmegaConf.update(cli_cfg, "duration", duration, force_add=True)
 
     writer = setup_writer(cli_cfg)
     try:
@@ -90,13 +91,15 @@ def main(cli_cfg: DictConfig) -> None:
         with torch.no_grad():
             cond_inv = prepare_conditions(
                 handler,
-                prompt_src_only,
+                src_tgt[:1],
                 float(cli_cfg.duration),
-                source_stereo_wav=wav,
             )
-            clean_latents = cond_inv.clean_latents
-            if clean_latents is None:
-                raise RuntimeError("prepare_conditions: expected clean_latents when source_stereo_wav is set")
+            clean_latents = encode_clean_latents(
+                handler,
+                wav,
+                target_t=int(cond_inv.context_latents.shape[1]),
+                out_dtype=cond_inv.context_latents.dtype,
+            )
 
         pipe_inv = InversionPipeline(cli_cfg)
         artifact, _ = pipe_inv.run(
@@ -107,9 +110,12 @@ def main(cli_cfg: DictConfig) -> None:
             artifact.save(inv_artifact_path)
             logger.info("Saved inversion artifact to {}", inv_artifact_path)
 
+        controller: AttentionControllerBase = instantiate(cli_cfg.controller)
+        controller.build(handler=handler, cfg=cli_cfg)
+
         with torch.inference_mode():
-            cond_fwd = prepare_conditions(handler, src_tgt, grid_duration_sec)
-            fwd = ForwardPipeline(cli_cfg)
+            cond_fwd = prepare_conditions(handler, src_tgt, float(cli_cfg.duration))
+            fwd = ForwardPipeline(cli_cfg, attention_controller=controller)
             out = fwd.run(model, model_condition=cond_fwd, inversion_artifact=artifact)
 
         fwd_traj = out.get("trajectory")

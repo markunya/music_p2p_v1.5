@@ -11,11 +11,10 @@ import torchaudio
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-from src.inversion.artifact import InversionArtifact
 from src.inversion.pipeline import InversionPipeline
 from src.logging.writer import setup_writer
 from src.mps_adg_patch import apply_adg_mps_patch
-from src.utils.initialization import init_dit_handler
+from src.utils.initialization import encode_clean_latents, init_dit_handler
 from src.utils.conditioning import prepare_conditions, prompts_from_hydra_prompt_node
 from src.utils.utils import resolve_against_original_cwd, set_random_seed, setup_exp_dir
 
@@ -76,6 +75,8 @@ def main(cli_cfg: DictConfig) -> None:
 
     prompts = prompts_from_hydra_prompt_node(cli_cfg.prompt, bsz)
     wav = _load_stereo_wav(music_path, target_sr=int(handler.sample_rate))
+    duration = float(wav.shape[-1]) / float(handler.sample_rate)
+    OmegaConf.update(cli_cfg, "duration", duration, force_add=True)
 
     model = handler.model
     writer = setup_writer(cli_cfg)
@@ -83,10 +84,13 @@ def main(cli_cfg: DictConfig) -> None:
         writer.add_audio("inv/input/source_stereo", wav, sample_rate=int(handler.sample_rate))
         # ``no_grad``: same as inversion — NTI must not see inference-only tensors on ``ModelCondition``.
         with torch.no_grad():
-            cond = prepare_conditions(handler, prompts, float(cli_cfg.duration), source_stereo_wav=wav)
-            clean_latents = cond.clean_latents
-            if clean_latents is None:
-                raise RuntimeError("prepare_conditions: expected clean_latents when source_stereo_wav is set")
+            cond = prepare_conditions(handler, prompts, float(cli_cfg.duration))
+            clean_latents = encode_clean_latents(
+                handler,
+                wav,
+                target_t=int(cond.context_latents.shape[1]),
+                out_dtype=cond.context_latents.dtype,
+            )
         pipe = InversionPipeline(cli_cfg)
         artifact, _ = pipe.run(
             model, clean_latents=clean_latents, model_condition=cond, writer=writer

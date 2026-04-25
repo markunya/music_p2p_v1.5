@@ -5,7 +5,7 @@ from typing import Any, Optional
 import torch
 from hydra.utils import instantiate
 from loguru import logger
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig, OmegaConf
 from tqdm import tqdm
 
 from src.inversion.artifact import InversionArtifact
@@ -55,6 +55,55 @@ class ForwardPipeline:
         )
         self._decoder_wrap_done: bool = False
         self._decoder_orig: torch.nn.Module | None = None
+        self._duration_sec: float = float(OmegaConf.select(cfg, "duration", default=0.0))
+        self._edit_regions_sec: list[tuple[float, float]] = self._normalize_edit_regions(
+            OmegaConf.select(cfg, "edit_regions", default=None),
+            self._duration_sec,
+        )
+        logger.info(
+            "ForwardPipeline edit_regions: duration={}s regions={}",
+            self._duration_sec,
+            self._edit_regions_sec,
+        )
+
+    @staticmethod
+    def _normalize_edit_regions(
+        raw_regions: object,
+        duration_sec: float,
+    ) -> list[tuple[float, float]]:
+        if not isinstance(raw_regions, (list, tuple, ListConfig)) or len(raw_regions) == 0:
+            if duration_sec > 0.0:
+                return [(0.0, duration_sec)]
+            return [(0.0, 1.0)]
+
+        out: list[tuple[float, float]] = []
+        for pair in raw_regions:
+            if not isinstance(pair, (list, tuple, ListConfig)) or len(pair) != 2:
+                continue
+            try:
+                start = float(pair[0])
+                end = float(pair[1])
+            except (TypeError, ValueError):
+                continue
+            if duration_sec > 0.0:
+                start = max(0.0, min(start, duration_sec))
+                end = max(0.0, min(end, duration_sec))
+            if end > start:
+                out.append((start, end))
+
+        if not out:
+            if duration_sec > 0.0:
+                return [(0.0, duration_sec)]
+            return [(0.0, 1.0)]
+
+        out.sort(key=lambda x: x[0])
+        merged: list[tuple[float, float]] = []
+        for start, end in out:
+            if not merged or start > merged[-1][1]:
+                merged.append((start, end))
+            else:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        return merged
 
     def _ensure_decoder_wrapped(self, model: torch.nn.Module) -> None:
         if self._decoder_wrap_done and self._decoder_orig is not None:
@@ -92,6 +141,20 @@ class ForwardPipeline:
         traj: list[torch.Tensor] = [x.detach().clone()]
         indices = range(self._infer_steps)
         step_name = type(self._stepper).__name__
+        edit_mask: torch.Tensor | None = None
+        if x.shape[0] == 2:
+            t_hidden = int(x.shape[1])
+            ratio = float(t_hidden) / max(float(self._duration_sec), 1e-12)
+            base = torch.zeros(t_hidden, device=device, dtype=dtype)
+            for start_sec, end_sec in self._edit_regions_sec:
+                i0 = max(0, min(t_hidden, int(start_sec * ratio)))
+                i1 = max(0, min(t_hidden, int(end_sec * ratio)))
+                if i1 > i0:
+                    base[i0:i1] = 1.0
+            if float(base.sum().item()) <= 0.0:
+                base[:] = 1.0
+            edit_mask = base.view(1, t_hidden, 1)
+
         self._ensure_decoder_wrapped(model)
         dit = model.decoder.inner if hasattr(model.decoder, "inner") else model.decoder
         rebind_eager_hook_for_decoder_submodule(dit)
@@ -138,6 +201,11 @@ class ForwardPipeline:
                     model_condition=model_condition,
                 )
                 x = payload.x
+                if x.shape[0] == 2 and edit_mask is not None:
+                    x_src_new = x[0:1]
+                    x_tgt_new = x[1:2]
+                    x_tgt_new = edit_mask * x_tgt_new + (1.0 - edit_mask) * x_src_new
+                    x = torch.cat([x_src_new, x_tgt_new], dim=0)
                 traj.append(x.detach().clone())
 
             if isinstance(self._stepper, GuidanceStepper):

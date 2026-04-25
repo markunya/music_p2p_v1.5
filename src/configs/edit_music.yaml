@@ -8,3 +8,7 @@ comet_run_prefix: edit
 
 exp_name: p2p_edit_run
 save_dir: _exps/p2p_edit
+
+# Optional local edit windows in seconds: [[start, end], ...].
+# If null/empty, ForwardPipeline uses full-range edit [[0, duration]].
+edit_regions: null

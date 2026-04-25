@@ -46,6 +46,10 @@ class BaseWriter(ABC):
     def add_image(self, image_name: str, image: Any, *, step: int | None = None) -> None:
         raise NotImplementedError
 
+    @abstractmethod
+    def add_text(self, text_name: str, text: str, *, step: int | None = None) -> None:
+        raise NotImplementedError
+
     def end(self) -> None:
         """Завершить эксперимент (Comet: ``experiment.end()``)."""
         pass
@@ -65,6 +69,9 @@ class DummyWriter(BaseWriter):
         pass
 
     def add_image(self, image_name: str, image: Any, *, step: int | None = None) -> None:
+        pass
+
+    def add_text(self, text_name: str, text: str, *, step: int | None = None) -> None:
         pass
 
     def end(self) -> None:
@@ -164,6 +171,10 @@ class CometMLWriter(BaseWriter):
         if isinstance(audio, np.ndarray):
             audio = audio.T
         self.exp.log_audio(file_name=audio_name, audio_data=audio, sample_rate=int(sample_rate or 48_000))
+
+    def add_text(self, text_name: str, text: str, *, step: int | None = None) -> None:
+        s = int(self.step if step is None else step)
+        self.exp.log_text(str(text), metadata={"name": text_name}, step=s)
 
     def end(self) -> None:
         try:

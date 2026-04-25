@@ -13,7 +13,8 @@ class AttentionControllerBase(abc.ABC):
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
-    def build(self, *, handler: Any, cfg: DictConfig) -> None:
+    def build(self, *, handler: Any, cfg: DictConfig, writer: Any | None = None) -> None:
+        _ = writer
         return None
 
     def __call__(self, attn_weight: torch.Tensor) -> torch.Tensor:
@@ -21,7 +22,8 @@ class AttentionControllerBase(abc.ABC):
 
 
 class DummyAttentionController(AttentionControllerBase):
-    def build(self, cfg, handler):
+    def build(self, *, handler: Any, cfg: DictConfig, writer: Any | None = None) -> None:
+        _ = (handler, cfg, writer)
         pass
     
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:

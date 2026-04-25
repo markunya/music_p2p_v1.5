@@ -22,7 +22,58 @@ class ReplacementAttentionController(AttentionControllerBase):
         self._lyrics_mapper: LyricReplacementMapper | None = None
         self._captions_mapper: CaptionsReplacementMapper | None = None
 
-    def build(self, *, handler, cfg: DictConfig) -> None:
+    @staticmethod
+    def _mapper_lines(matrix: torch.Tensor) -> str:
+        m = matrix.detach().cpu()
+        n_tgt, n_src = int(m.shape[0]), int(m.shape[1])
+        src_to_tgt = [set() for _ in range(n_src)]
+        tgt_to_src = [set() for _ in range(n_tgt)]
+        for j in range(n_tgt):
+            nz = (m[j] > 1e-12).nonzero(as_tuple=False).flatten().tolist()
+            for i in nz:
+                tgt_to_src[j].add(int(i))
+                src_to_tgt[int(i)].add(j)
+
+        visited_src: set[int] = set()
+        visited_tgt: set[int] = set()
+        lines: list[str] = []
+        for s0 in range(n_src):
+            if s0 in visited_src:
+                continue
+            stack_src = [s0]
+            comp_src: set[int] = set()
+            comp_tgt: set[int] = set()
+            while stack_src:
+                s = stack_src.pop()
+                if s in comp_src:
+                    continue
+                comp_src.add(s)
+                for t in src_to_tgt[s]:
+                    if t not in comp_tgt:
+                        comp_tgt.add(t)
+                        for s2 in tgt_to_src[t]:
+                            if s2 not in comp_src:
+                                stack_src.append(s2)
+            if not comp_tgt:
+                continue
+            visited_src.update(comp_src)
+            visited_tgt.update(comp_tgt)
+            left = ", ".join([f"token_{i+1}_src" for i in sorted(comp_src)])
+            right = ", ".join([f"token_{j+1}_tgt" for j in sorted(comp_tgt)])
+            lines.append(f"({left}) -> ({right})")
+
+        for t0 in range(n_tgt):
+            if t0 in visited_tgt:
+                continue
+            srcs = sorted(tgt_to_src[t0])
+            if not srcs:
+                continue
+            left = ", ".join([f"token_{i+1}_src" for i in srcs])
+            lines.append(f"({left}) -> (token_{t0+1}_tgt)")
+
+        return "\n".join(lines) if lines else "(no mapper edges)"
+
+    def build(self, *, handler, cfg: DictConfig, writer=None) -> None:
         src_raw, tgt_raw = p2p_src_tgt_prompt_configs(cfg.p2p_task)
         prompts = [src_raw, tgt_raw]
         duration = float(cfg.duration)
@@ -66,6 +117,16 @@ class ReplacementAttentionController(AttentionControllerBase):
         self._lyrics_mapper = bundle.lyrics if ly_src_len and ly_tgt_len else None
         self._captions_mapper = bundle.captions if cap_src_len and cap_tgt_len else None
         self._enabled = self._lyrics_mapper is not None or self._captions_mapper is not None
+
+        if writer is not None:
+            writer.add_text(
+                "edit/replacement_mapper_lyrics",
+                self._mapper_lines(bundle.lyrics.matrix),
+            )
+            writer.add_text(
+                "edit/replacement_mapper_captions",
+                self._mapper_lines(bundle.captions.matrix),
+            )
 
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:
         if not self._enabled:

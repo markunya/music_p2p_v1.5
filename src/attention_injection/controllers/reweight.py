@@ -29,7 +29,8 @@ class ReweightAttentionController(AttentionControllerBase):
         self._equalizer: torch.Tensor | None = None
         self._n_forward: int = 0
 
-    def build(self, *, handler, cfg: DictConfig) -> None:
+    def build(self, *, handler, cfg: DictConfig, writer=None) -> None:
+        _ = writer
         src_raw, tgt_raw = p2p_src_tgt_prompt_configs(cfg.p2p_task)
         clean_tgt, reweight_targets = parse_reweight_from_tgt(tgt_raw)
         prompts = [src_raw, clean_tgt]

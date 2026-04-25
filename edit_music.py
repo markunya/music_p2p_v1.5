@@ -111,7 +111,7 @@ def main(cli_cfg: DictConfig) -> None:
             logger.info("Saved inversion artifact to {}", inv_artifact_path)
 
         controller: AttentionControllerBase = instantiate(cli_cfg.controller)
-        controller.build(handler=handler, cfg=cli_cfg)
+        controller.build(handler=handler, cfg=cli_cfg, writer=writer)
 
         with torch.inference_mode():
             cond_fwd = prepare_conditions(handler, src_tgt, float(cli_cfg.duration))

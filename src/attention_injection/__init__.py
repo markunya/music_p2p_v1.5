@@ -63,7 +63,6 @@ __all__ = [
     "REWEIGHT_UP",
     "REWEIGHT_DOWN",
     "ReweightTarget",
-    "assert_src_no_reweight_marks",
     "parse_reweight_from_tgt",
     "strip_reweight_marks",
     "build_p2p_key_boost",

@@ -35,7 +35,7 @@ class InjectionMapper(ABC):
     def _build_matrix(self) -> torch.Tensor:
         raise NotImplementedError
 
-    def apply(self, attn: torch.Tensor, *, key_slice: slice | tuple[int, int]) -> torch.Tensor:
-        """Future: remap attention weights along the encoder-key axis. No-op stub for mapper-only PR."""
-        _ = key_slice
-        return attn
+    def apply(self, attn_src: torch.Tensor) -> torch.Tensor:
+        """Map attention along key axis: ``(..., K_src) @ M^T -> (..., K_tgt)``."""
+        m_t = self._matrix.to(device=attn_src.device, dtype=attn_src.dtype).t()
+        return torch.matmul(attn_src, m_t)

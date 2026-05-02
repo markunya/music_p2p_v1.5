@@ -24,8 +24,7 @@ from src.attention_injection.tokenize import (
     tokenize_with_handler_tokenizer,
 )
 from src.attention_injection.reweight_utils import (
-    REWEIGHT_DOWN,
-    REWEIGHT_UP,
+    REWEIGHT_MARK,
     ReweightTarget,
     build_2d_equalizer_for_p2p,
     build_p2p_key_boost,
@@ -58,8 +57,7 @@ __all__ = [
     "clear_runtime_controller",
     "infer_attention_head_query_key",
     "verify_key_dim_against_M",
-    "REWEIGHT_UP",
-    "REWEIGHT_DOWN",
+    "REWEIGHT_MARK",
     "ReweightTarget",
     "parse_reweight_from_tgt",
     "strip_reweight_marks",

@@ -7,25 +7,25 @@ import torch
 from src.schemas import PromptConfig
 from src.utils.conditioning import ModelCondition
 
-REWEIGHT_UP = "\u2191"
-REWEIGHT_DOWN = "\u2193"
-_ARROW_CHARS = f"{REWEIGHT_UP}{REWEIGHT_DOWN}"
-_RE_LYRIC_WORD = re.compile(r"([^\s" + re.escape(_ARROW_CHARS) + r"]+)([" + re.escape(_ARROW_CHARS) + r"])")
+# ※  U+203B — paste this after a caption tag or lyric word to mark reweight targets
+REWEIGHT_MARK = "\u203b"
+_RE_LYRIC_WORD = re.compile(
+    r"([^\s" + re.escape(REWEIGHT_MARK) + r"]+)(" + re.escape(REWEIGHT_MARK) + r")"
+)
 
 
 @dataclass(frozen=True)
 class ReweightTarget:
-
     field: Literal["captions", "lyrics"]
     text: str
 
 
 def strip_reweight_marks(s: str) -> str:
-    return s.translate(str.maketrans("", "", _ARROW_CHARS))
+    return s.replace(REWEIGHT_MARK, "")
 
 
 def _has_marks(s: str) -> bool:
-    return REWEIGHT_UP in s or REWEIGHT_DOWN in s
+    return REWEIGHT_MARK in s
 
 
 def _parse_caption_tag_targets(captions_raw: str) -> list[str]:
@@ -36,13 +36,13 @@ def _parse_caption_tag_targets(captions_raw: str) -> list[str]:
         s = part.strip()
         if not s:
             continue
-        for ar in (REWEIGHT_UP, REWEIGHT_DOWN):
-            if s.endswith(ar):
-                t = s[: -1].strip()
-                if not t:
-                    raise ValueError(f"Invalid reweight: empty tag before {ar!r} in captions segment: {part!r}")
-                out.append(t)
-                break
+        if s.endswith(REWEIGHT_MARK):
+            t = s[: -1].strip()
+            if not t:
+                raise ValueError(
+                    f"Invalid reweight: empty tag before {REWEIGHT_MARK!r} in captions segment: {part!r}"
+                )
+            out.append(t)
     return out
 
 

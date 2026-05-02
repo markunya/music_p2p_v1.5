@@ -1,5 +1,5 @@
-# Перевзвесить инструмент: ↑/↓ в captions (tgt для reweight). Оригин: dont_know_why
-captions: "jazz pop, soft jazz, female vocal, calm, melancholic, piano↑, guitar, drums, intimate"
+# reweight: append ※ (U+203B) to a caption tag. Orig: dont_know_why
+captions: "jazz pop, soft jazz, female vocal, calm, melancholic, piano※, guitar, drums, intimate"
 lyrics: |
   I waited 'til I saw the sun
   I don't know why I didn't come

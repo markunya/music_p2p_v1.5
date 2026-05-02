@@ -10,6 +10,7 @@ from src.utils.conditioning import p2p_src_tgt_prompt_configs, prepare_condition
 
 class ReplacementAttentionController(AttentionControllerBase):
     def __init__(self) -> None:
+        super().__init__()
         self._enabled = False
         self._ly_src: slice = slice(0, 0)
         self._ly_tgt: slice = slice(0, 0)

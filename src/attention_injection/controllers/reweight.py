@@ -21,6 +21,7 @@ class ReweightAttentionController(AttentionControllerBase):
         *,
         reweight_strength: float = 1.0,
     ) -> None:
+        super().__init__()
         self.reweight_strength = reweight_strength
         self._equalizer: torch.Tensor | None = None
         self._n_forward: int = 0

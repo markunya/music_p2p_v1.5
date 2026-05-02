@@ -7,6 +7,12 @@ import torch
 
 
 class AttentionControllerBase(abc.ABC):
+    def __init__(self) -> None:
+        self.ctx: dict[str, Any] = {}
+
+    def set_context(self, ctx: dict[str, Any]) -> None:
+        self.ctx = ctx
+
     @abc.abstractmethod
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError

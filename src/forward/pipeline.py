@@ -189,6 +189,7 @@ class ForwardPipeline:
                         self._stepper.set_null_encoder_override(None)
 
                 t_curr, t_next = t[i], t[i + 1]
+                self._controller.set_context({"t": float(t_curr)})
                 payload = self._stepper.step(
                     model=model,
                     x=x,
@@ -210,6 +211,7 @@ class ForwardPipeline:
             if prev_attn_impl is not None and dit is not None and hasattr(dit, "config"):
                 dit.config._attn_implementation = prev_attn_impl
                 logger.info("Attention injection: restored decoder _attn_implementation to {!r}", prev_attn_impl)
+            self._controller.set_context({})
 
         logger.info("Forward diffusion done, final x.shape={}", tuple(x.shape))
         return {"final_latents": x, "trajectory": traj}

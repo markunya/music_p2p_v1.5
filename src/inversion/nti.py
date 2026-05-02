@@ -42,6 +42,7 @@ class NullTextOptimization:
         model_condition: ModelCondition,
         guidance_stepper: GuidanceStepper,
         infer_steps: int,
+        forward_start_step_index: int = 0,
     ) -> List[torch.Tensor]:
         device = next(model.parameters()).device
         dtype = next(model.parameters()).dtype
@@ -50,10 +51,16 @@ class NullTextOptimization:
         if cond_ref.shape[0] != 1:
             raise ValueError(f"NTI v1 expects batch size 1, got {cond_ref.shape[0]}")
 
+        start = int(forward_start_step_index)
+        if start < 0 or start > infer_steps:
+            raise ValueError(f"forward_start_step_index must be in [0, {infer_steps}], got {start}")
+
         rev_traj = trajectory[::-1]
-        if len(rev_traj) != infer_steps + 1:
+        expected_len = infer_steps - start + 1
+        if len(rev_traj) != expected_len:
             raise ValueError(
-                f"NTI: reversed trajectory length {len(rev_traj)} != infer_steps+1 ({infer_steps + 1})"
+                f"NTI: trajectory length {len(trajectory)} (rev {len(rev_traj)}) != "
+                f"infer_steps - forward_start + 1 = {expected_len} (infer_steps={infer_steps}, start={start})"
             )
 
         t = torch.linspace(1.0, 0.0, infer_steps + 1, device=device, dtype=dtype)
@@ -61,16 +68,21 @@ class NullTextOptimization:
         latent_cur = rev_traj[0].detach().to(device=device, dtype=dtype)
         null_emb_prev: torch.Tensor | None = None
 
+        n_outer = len(rev_traj) - 1
+        if n_outer == 0:
+            logger.info("NTI: zero outer steps (trajectory length 1); skipping null-text optimization")
+            return []
+
         if not self._init_from_previous_outer:
             logger.info(
                 "NTI: init_from_previous_outer=False — each outer step starts from model.null_condition_emb"
             )
 
-        outer = tqdm(range(infer_steps), desc="NTI (null-text)", leave=False)
+        outer = tqdm(range(n_outer), desc="NTI (null-text)", leave=False)
         for j in outer:
             target = rev_traj[j + 1].detach().to(device=device, dtype=dtype)
-            t_curr, t_next = t[j], t[j + 1]
-            lr_j = _lr_outer(j, infer_steps, self._lr)
+            t_curr, t_next = t[start + j], t[start + j + 1]
+            lr_j = _lr_outer(j, n_outer, self._lr)
 
             use_prev = self._init_from_previous_outer and j > 0 and null_emb_prev is not None
             if use_prev:

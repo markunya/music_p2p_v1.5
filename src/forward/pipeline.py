@@ -136,7 +136,22 @@ class ForwardPipeline:
 
         t = torch.linspace(1.0, 0.0, self._infer_steps + 1, device=device, dtype=dtype)
         traj: list[torch.Tensor] = [x.detach().clone()]
-        indices = range(self._infer_steps)
+        start = int(inversion_artifact.forward_start_step_index)
+        if start < 0 or start > self._infer_steps:
+            logger.warning(
+                "forward_start_step_index={} out of [0, {}], clamping",
+                start,
+                self._infer_steps,
+            )
+            start = max(0, min(self._infer_steps, start))
+        if start > 0:
+            logger.info(
+                "ForwardPipeline: starting at step {}/{} (skipping first {} steps)",
+                start,
+                self._infer_steps,
+                start,
+            )
+        indices = range(start, self._infer_steps)
         step_name = type(self._stepper).__name__
         edit_mask: torch.Tensor | None = None
         if x.shape[0] == 2:
@@ -168,19 +183,23 @@ class ForwardPipeline:
                     prev_attn_impl,
                 )
         npe = inversion_artifact.null_embeddings_per_step
-        if npe is not None and len(npe) != self._infer_steps:
+        npe_expected = self._infer_steps - start
+        if npe is not None and len(npe) != npe_expected:
             logger.warning(
-                "null_embeddings_per_step has length {} but inference_steps={}; "
+                "null_embeddings_per_step has length {} but expected {} (inference_steps={}, start={}); "
                 "indices beyond min will skip override",
                 len(npe),
+                npe_expected,
                 self._infer_steps,
+                start,
             )
 
         try:
-            for i in tqdm(indices, total=self._infer_steps, desc=f"Forward ({step_name})"):
+            for i in tqdm(indices, total=len(indices), desc=f"Forward ({step_name})"):
                 if isinstance(self._stepper, GuidanceStepper):
-                    if npe is not None and i < len(npe):
-                        ne = npe[i].to(device=device, dtype=dtype)
+                    npe_idx = i - start
+                    if npe is not None and 0 <= npe_idx < len(npe):
+                        ne = npe[npe_idx].to(device=device, dtype=dtype)
                         latent_bsz = int(x.shape[0])
                         if ne.shape[0] == 1 and latent_bsz > 1:
                             ne = ne.expand(latent_bsz, *ne.shape[1:])

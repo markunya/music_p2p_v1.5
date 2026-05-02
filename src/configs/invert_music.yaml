@@ -15,6 +15,10 @@ music_path: ???
 
 artifact_out: inverted_artifact.pt
 
+# alpha in [0, 1]: fraction of inversion steps to run (1.0 = full inversion).
+# Partial inversion stores latent at t ~ alpha; ForwardPipeline starts at step N-K.
+alpha: 1.0
+
 # Comet: false-color latent grids along inversion only (expensive).
 log_trajectory_images: false
 log_trajectory_max_edge: 4096

@@ -19,10 +19,6 @@ def set_random_seed(seed: int) -> None:
 
 
 def setup_exp_dir(cfg: DictConfig) -> str:
-    """Create experiment dir under ``save_dir`` (relative to original cwd).
-
-    Fails if ``exp_dir`` already exists so each run uses a fresh ``exp_name``.
-    """
     base = Path(get_original_cwd()) / str(cfg.save_dir)
     exp_dir = base / str(cfg.exp_name)
     if exp_dir.exists():
@@ -38,7 +34,6 @@ def setup_exp_dir(cfg: DictConfig) -> str:
 
 
 def resolve_against_original_cwd(path: str) -> str:
-    """Resolve a path from config as relative to Hydra original cwd."""
     p = Path(path)
     if p.is_absolute():
         return str(p.resolve())

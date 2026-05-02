@@ -1,5 +1,3 @@
-"""Structured config nodes for Hydra (optional validation via ConfigStore)."""
-
 from dataclasses import dataclass, field
 from typing import Any, List
 

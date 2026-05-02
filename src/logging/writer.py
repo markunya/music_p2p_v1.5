@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 import sys
 from abc import ABC, abstractmethod
@@ -51,7 +49,6 @@ class BaseWriter(ABC):
         raise NotImplementedError
 
     def end(self) -> None:
-        """Завершить эксперимент (Comet: ``experiment.end()``)."""
         pass
 
 
@@ -79,7 +76,6 @@ class DummyWriter(BaseWriter):
 
 
 class CometMLWriter(BaseWriter):
-    """Трекинг через Comet ML (``pip install comet_ml``, переменные окружения / ``comet_ml.login()``)."""
 
     def __init__(self, project_config: DictConfig):
         import comet_ml
@@ -187,7 +183,6 @@ class CometMLWriter(BaseWriter):
 
 
 def _flatten_config_for_comet(obj: Any, prefix: str = "") -> dict[str, Any]:
-    """Плоский dict строковых значений для ``log_parameters``."""
     out: dict[str, Any] = {}
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -214,7 +209,6 @@ _COMET_RUN_NAME_RE = re.compile(r"^(gen|edit|inv)_")
 
 
 def setup_writer(cfg: DictConfig) -> BaseWriter:
-    """По ``cfg.writer``: ``null`` / отсутствует → ``DummyWriter``; иначе ``CometMLWriter``."""
     if isinstance(cfg, DictConfig) and OmegaConf.is_missing(cfg, "writer"):
         return _dummy_writer("в конфиге нет ключа writer")
     w = OmegaConf.select(cfg, "writer")

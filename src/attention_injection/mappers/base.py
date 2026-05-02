@@ -1,7 +1,3 @@
-"""Abstract injection mapper: stochastic ``(len_tgt, len_src)`` matrix + optional ``apply`` hook."""
-
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from typing import Tuple
 
@@ -11,10 +7,6 @@ from src.attention_injection.validate import assert_row_stochastic
 
 
 class InjectionMapper(ABC):
-    """Row ``i`` is a distribution over **src** keys for **tgt** position ``i`` (``M[i, j]``, ``j`` = src).
-
-    Rows sum to 1, entries ``>= 0``. Built in ``__init__`` / ``_build_matrix``.
-    """
 
     def __init__(self, *, device: torch.device | None = None, dtype: torch.dtype = torch.float32) -> None:
         self._device = device or torch.device("cpu")
@@ -24,7 +16,6 @@ class InjectionMapper(ABC):
 
     @property
     def matrix(self) -> torch.Tensor:
-        """Shape ``(len_tgt, len_src)``, row-stochastic."""
         return self._matrix
 
     @property
@@ -36,6 +27,5 @@ class InjectionMapper(ABC):
         raise NotImplementedError
 
     def apply(self, attn_src: torch.Tensor) -> torch.Tensor:
-        """Map attention along key axis: ``(..., K_src) @ M^T -> (..., K_tgt)``."""
         m_t = self._matrix.to(device=attn_src.device, dtype=attn_src.dtype).t()
         return torch.matmul(attn_src, m_t)

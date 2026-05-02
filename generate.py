@@ -1,7 +1,3 @@
-"""Text-to-music: Hydra cfg → DiT + ``ForwardPipeline`` (stepper) → WAV."""
-
-from __future__ import annotations
-
 import warnings
 from pathlib import Path
 
@@ -98,7 +94,6 @@ def main(cli_cfg: DictConfig) -> None:
         fmt = str(cli_cfg.audio_format).lower()
         for i in range(wavs.shape[0]):
             out_path = exp_dir / f"sample_{i}.{fmt}"
-            # torchaudio.save (torchcodec backend) expects shape [channels, time] or [time]
             clip = wavs[i].detach().cpu().float()
             torchaudio.save(str(out_path), clip, sr)
             writer.add_audio(f"gen/output/sample_{i}", clip, sample_rate=sr)

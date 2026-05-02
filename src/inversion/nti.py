@@ -1,7 +1,3 @@
-"""Null-text optimization after inversion (ACE-Step + ``GuidanceStepper``)."""
-
-from __future__ import annotations
-
 from typing import Any, List
 
 import torch

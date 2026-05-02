@@ -1,16 +1,7 @@
-"""Monkey-patch ACE-Step ADG for Apple MPS.
-
-Upstream ``adg_forward`` uses ``.to(float)`` → float64; MPS does not support float64.
-Call :func:`apply_adg_mps_patch` before any ``import acestep...`` that binds ``adg_forward``.
-"""
-
-from __future__ import annotations
-
 _applied = False
 
 
 def apply_adg_mps_patch() -> None:
-    """Idempotent: replace ``acestep.models.common.apg_guidance.adg_forward`` with float32-safe ADG."""
     global _applied
     if _applied:
         return
@@ -64,7 +55,6 @@ def apply_adg_mps_patch() -> None:
         latent_hat_uncond = latents - sigma * noise_pred_uncond
         latent_diff = latent_hat_text - latent_hat_uncond
 
-        # float32: upstream ``.to(float)`` is float64 and breaks MPS.
         cos_theta = call_cos_tensor(
             latent_hat_text.view(-1, c).float(),
             latent_hat_uncond.reshape(-1, c).contiguous().float(),

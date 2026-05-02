@@ -1,7 +1,3 @@
-"""Caption replacement mapper: equal comma-separated tag count; per-tag block (tgt, src) row-stochastic."""
-
-from __future__ import annotations
-
 import torch
 
 from src.attention_injection.mappers.base import InjectionMapper
@@ -22,7 +18,6 @@ def _tag_pair_block(
     dtype: torch.dtype,
     max_length: int,
 ) -> torch.Tensor:
-    """Block ``(len_tgt_tok, len_src_tok)`` row-stochastic."""
     src_t = tokenize_caption_raw(src_tag, tokenizer, max_length=max_length).active_ids()
     tgt_t = tokenize_caption_raw(tgt_tag, tokenizer, max_length=max_length).active_ids()
     ls, lt = len(src_t), len(tgt_t)
@@ -41,7 +36,6 @@ def _tag_pair_block(
 
 
 class CaptionsReplacementMapper(InjectionMapper):
-    """Replacement over comma-separated caption tags (equal tag count); block-diagonal per tag pair."""
 
     def __init__(
         self,

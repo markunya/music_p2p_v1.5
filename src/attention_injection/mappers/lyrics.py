@@ -1,7 +1,3 @@
-"""Lyrics replacement mapper: ``SequenceMatcher`` on lyric token ids → row-stochastic ``(tgt, src)``."""
-
-from __future__ import annotations
-
 from difflib import SequenceMatcher
 from typing import List
 
@@ -18,7 +14,6 @@ def _build_src_tgt_stochastic_matrix(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
-    """``A`` with shape ``(len_src, len_tgt)``, each **src** row sums to 1 (replacement-style)."""
     m, n = len(idx_src), len(idx_tgt)
     A = torch.zeros(m, n, device=device, dtype=dtype)
     sm = SequenceMatcher(None, idx_src, idx_tgt)
@@ -49,7 +44,6 @@ def _build_src_tgt_stochastic_matrix(
             raise RuntimeError(f"unknown opcode {opcode}")
     row_sums = A.sum(dim=-1, keepdim=True).clamp(min=1e-12)
     A = A / row_sums
-    # ``(tgt, src)``: row ``j`` proportional to column ``j`` of ``A`` (mass from src keys to tgt ``j``).
     M_tgt_src = A.transpose(0, 1).contiguous()
     for j in range(n):
         csum = M_tgt_src[j].sum()
@@ -61,7 +55,6 @@ def _build_src_tgt_stochastic_matrix(
 
 
 class LyricReplacementMapper(InjectionMapper):
-    """Replacement alignment of two lyric strings in the same token space as ACE-Step ``lyric_token_idss``."""
 
     def __init__(
         self,

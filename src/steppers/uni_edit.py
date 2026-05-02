@@ -11,7 +11,7 @@ class UniEditStepper(BaseStepper):
         omega: float = 0.0,
         eps: float = 1e-8,
         do_abs: bool = False,
-        mask_mode: Literal["image", "audio"] = "audio",
+        mask_mode: Literal["image", "audio"] = "image",
     ):
         super().__init__()
         self.omega = omega

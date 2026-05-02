@@ -1,12 +1,7 @@
-"""Row-stochastic checks for injection matrices ``M`` with shape ``(len_tgt, len_src)``."""
-
-from __future__ import annotations
-
 import torch
 
 
 def assert_row_stochastic(M: torch.Tensor, *, atol: float = 1e-5) -> None:
-    """Each row sums to 1, entries non-negative."""
     if M.dim() != 2:
         raise ValueError(f"Expected 2D matrix, got shape {tuple(M.shape)}")
     if (M < -atol).any():
@@ -26,7 +21,6 @@ def is_row_stochastic(M: torch.Tensor, *, atol: float = 1e-5) -> bool:
 
 
 def pad_square_identity(M: torch.Tensor, max_len: int, *, device=None, dtype=None) -> torch.Tensor:
-    """Pad ``(m, n)`` to ``(max_len, max_len)`` with identity tail for empty rows."""
     if max_len < M.shape[0] or max_len < M.shape[1]:
         raise ValueError(f"max_len {max_len} smaller than M {tuple(M.shape)}")
     dev = device or M.device

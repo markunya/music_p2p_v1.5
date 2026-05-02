@@ -1,7 +1,3 @@
-"""Parse reweight marker arrows (Unicode ↑ / ↓) in tgt prompts and build encoder key boost masks for :class:`ReweightAttentionController`."""
-
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -11,22 +7,20 @@ import torch
 from src.schemas import PromptConfig
 from src.utils.conditioning import ModelCondition
 
-REWEIGHT_UP = "\u2191"  # ↑
-REWEIGHT_DOWN = "\u2193"  # ↓
+REWEIGHT_UP = "\u2191"
+REWEIGHT_DOWN = "\u2193"
 _ARROW_CHARS = f"{REWEIGHT_UP}{REWEIGHT_DOWN}"
 _RE_LYRIC_WORD = re.compile(r"([^\s" + re.escape(_ARROW_CHARS) + r"]+)([" + re.escape(_ARROW_CHARS) + r"])")
 
 
 @dataclass(frozen=True)
 class ReweightTarget:
-    """A caption tag or a lyric word to up-weight, resolved from cleaned user text."""
 
     field: Literal["captions", "lyrics"]
     text: str
 
 
 def strip_reweight_marks(s: str) -> str:
-    """Remove all ↑/↓ (service symbols only)."""
     return s.translate(str.maketrans("", "", _ARROW_CHARS))
 
 
@@ -35,7 +29,6 @@ def _has_marks(s: str) -> bool:
 
 
 def _parse_caption_tag_targets(captions_raw: str) -> list[str]:
-    """Tags are comma-separated segments; the marker must be at the end of the containing segment."""
     if not _has_marks(captions_raw):
         return []
     out: list[str] = []
@@ -54,7 +47,6 @@ def _parse_caption_tag_targets(captions_raw: str) -> list[str]:
 
 
 def _parse_lyric_word_targets(lyrics_raw: str) -> list[str]:
-    """A word (non-space run) must immediately precede a marker."""
     if not _has_marks(lyrics_raw):
         return []
     return [m.group(1) for m in _RE_LYRIC_WORD.finditer(lyrics_raw) if m.group(1)]
@@ -63,7 +55,6 @@ def _parse_lyric_word_targets(lyrics_raw: str) -> list[str]:
 def parse_reweight_from_tgt(
     raw_tgt: PromptConfig,
 ) -> tuple[PromptConfig, list[ReweightTarget]]:
-    """Return cleaned ``PromptConfig`` (no ↑/↓) and targets for the forward pass (must match what ACE-Step sees)."""
     cap = raw_tgt.captions
     lyr = raw_tgt.lyrics
     cap_targets = _parse_caption_tag_targets(cap)
@@ -86,7 +77,6 @@ def _sft_caption_text_prompt(
     captions: list[str],
     vocal_languages: list[str],
 ) -> tuple[str, str, str]:
-    """SFT string as in ``_prepare_text_conditioning_inputs``; returns ``(text_prompt, actual_caption, actual_language)``."""
     from acestep.constants import DEFAULT_DIT_INSTRUCTION, SFT_GEN_PROMPT
 
     if getattr(getattr(handler, "model", None), "config", object()) and getattr(
@@ -104,7 +94,6 @@ def _sft_caption_text_prompt(
 
 
 def _sft_caption_only_body(t_prompt: str) -> str:
-    """The ``# Caption`` body (trimmed) inside the SFT string."""
     mark = "# Caption\n"
     a = t_prompt.find(mark)
     if a < 0:
@@ -119,7 +108,6 @@ def _sft_caption_only_body(t_prompt: str) -> str:
 
 
 def _caption_char_range_in_sft(t_prompt: str, tag: str) -> tuple[int, int]:
-    """Character ``[c0, c1)`` in full ``t_prompt`` covering ``tag`` inside the # Caption block only."""
     mark = "# Caption\n"
     i0 = t_prompt.find(mark)
     if i0 < 0:
@@ -157,7 +145,6 @@ def _char_range_for_substring_in(text: str, query: str, field_name: str) -> tupl
 def _token_ids_covering(
     handler: Any, full_text: str, c0: int, c1: int, max_length: int
 ) -> list[int]:
-    """Token rows whose (char) offsets overlap ``[c0, c1)`` in ``full_text``."""
     toker = handler.text_tokenizer
     out = toker(
         full_text,
@@ -171,7 +158,6 @@ def _token_ids_covering(
     om = getattr(out, "offset_mapping", None)
     if om is None:
         raise ValueError("text_tokenizer must return offset_mapping for reweight (HF tokenizer)")
-    # HF with return_tensors="pt": (B, S, 2) — use batch 0 -> (S, 2). (S, 2) with no batch: use as-is.
     if om.dim() == 3:
         om0 = om[0]
     elif om.dim() == 2 and int(om.size(-1)) == 2:
@@ -198,7 +184,6 @@ def _k_ranks_caption(
     n1: int,
     token_positions: list[int],
 ) -> set[int]:
-    """Map text token row positions to global K (caption block after timbre+lyric)."""
     ks: set[int] = set()
     for tpos in token_positions:
         if tpos < 0 or tpos >= text_mask.shape[1]:
@@ -239,7 +224,6 @@ def build_p2p_key_boost(
     targets: list[ReweightTarget],
     batch_tgt_index: int = 1,
 ) -> list[int]:
-    """Binary {0,1} per encoder key, length K, for the **tgt** row."""
     b = int(batch_tgt_index)
     bsz = int(model_condition.encoder_hidden_states.shape[0])
     if b < 0 or b >= bsz:
@@ -292,7 +276,6 @@ def build_2d_equalizer_for_p2p(
     k: int,
     tgt_batch_index: int = 1,
 ) -> list[list[float]]:
-    """(B, K) per-key multipliers: all rows 1.0; at ``tgt_batch_index`` use ``reweight_strength`` where mask is 1."""
     if len(key_boost_mask) != k:
         raise ValueError(f"key_boost_mask length {len(key_boost_mask)} != K {k}")
     if batch_size < 1 or tgt_batch_index < 0 or tgt_batch_index >= batch_size:

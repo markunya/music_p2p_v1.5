@@ -1,7 +1,3 @@
-"""Comet / writer helpers for latent trajectories (scalars per time index, optional images)."""
-
-from __future__ import annotations
-
 import torch
 from omegaconf import DictConfig, OmegaConf
 
@@ -9,7 +5,6 @@ from src.logging.writer import BaseWriter
 
 
 def trajectory_image_flags(cfg: DictConfig) -> tuple[bool, int]:
-    """Hydra: ``log_trajectory_images`` / ``log_trajectory_max_edge`` (defined under ``invert_music`` / ``edit_music``)."""
     return (
         bool(OmegaConf.select(cfg, "log_trajectory_images", default=False)),
         int(OmegaConf.select(cfg, "log_trajectory_max_edge", default=4096)),
@@ -24,10 +19,6 @@ def log_latent_trajectory(
     log_images: bool = False,
     max_edge: int = 4096,
 ) -> None:
-    """Log mean / std / L2 of each latent snapshot (Comet step = index along trajectory).
-
-    If ``log_images``, also logs false-color ``(C × L)`` grids per batch (see ``trajectory_images``).
-    """
     if not trajectory:
         return
     prev: torch.Tensor | None = None

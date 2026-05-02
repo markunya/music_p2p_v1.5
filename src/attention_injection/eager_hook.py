@@ -1,13 +1,3 @@
-"""Patch Qwen3 ``eager_attention_forward`` — only **cross** attention goes through the active controller.
-
-ACE-Step imports ``eager_attention_forward`` at module load; patching only ``modeling_qwen3`` is not
-enough — we also rebind the symbol in loaded ``acestep.*modeling*`` modules.  Non-eager
-``_attn_implementation`` (sdpa/flash) never calls this path; :class:`ForwardPipeline` sets the
-DiT to ``eager`` while a non-dummy controller is active.
-"""
-
-from __future__ import annotations
-
 import sys
 import threading
 from contextvars import ContextVar
@@ -61,10 +51,9 @@ def _instrumented_eager_attention_forward(
 
 
 def _rebind_eager_in_acestep_modeling_modules() -> int:
-    """AceStep caches ``from qwen3 import eager_attention_forward``; replace that binding too."""
     n = 0
     for name, mod in list(sys.modules.items()):
-        if not isinstance(name, str) or mod is None or "acestep" not in name or "modeling" not in name:
+        if mod is None or "acestep" not in name or "modeling" not in name:
             continue
         if not hasattr(mod, "eager_attention_forward"):
             continue
@@ -74,7 +63,6 @@ def _rebind_eager_in_acestep_modeling_modules() -> int:
 
 
 def rebind_eager_hook_for_decoder_submodule(obj: object) -> bool:
-    """Bind the patch on the module that defines the loaded ``AceStep*`` class (e.g. DiT layer)."""
     mod_name = getattr(obj, "__class__", type(obj)).__module__
     m = sys.modules.get(mod_name)
     if m is not None and hasattr(m, "eager_attention_forward"):

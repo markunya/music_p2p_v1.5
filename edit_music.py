@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import warnings
 from pathlib import Path
 
@@ -30,7 +28,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def _load_stereo_wav(path: str, target_sr: int) -> torch.Tensor:
-    """Load WAV/FLAC, mix to stereo, resample to ``target_sr``. Returns ``[2, T]`` float32."""
     wav, sr = torchaudio.load(path)
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)

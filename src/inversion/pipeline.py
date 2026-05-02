@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any
 
 import torch
@@ -17,7 +15,6 @@ from src.utils.conditioning import ModelCondition
 
 
 class InversionPipeline:
-    """Backward ODE; stepper from ``cfg.invert_stepper`` (Hydra: ``stepper@invert_stepper: …``), else ``cfg.stepper``."""
 
     def __init__(self, cfg: DictConfig) -> None:
         self._cfg = cfg

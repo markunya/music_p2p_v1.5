@@ -1,7 +1,3 @@
-"""Classifier-free and APG/ADG guidance wrapper over Euler / Heun (ACE-Step XL layout)."""
-
-from __future__ import annotations
-
 from enum import StrEnum
 from typing import Any
 
@@ -29,12 +25,6 @@ class GuidanceMode(StrEnum):
 
 
 class GuidanceStepper(BaseStepper):
-    """Doubles batch ``[cond, null]`` for the decoder (see ACE-Step XL), then combines velocities.
-
-    ``null_condition_emb`` is read from ``model`` when guidance is active. ``ModelCondition``
-    text/context tensors are expanded in place on the first guided step and stay ``2B`` for
-    the rest of the run (KV cache is built for ``2B``).
-    """
 
     def __init__(
         self,
@@ -82,16 +72,13 @@ class GuidanceStepper(BaseStepper):
         self._null_encoder_override: torch.Tensor | None = None
 
     def set_null_encoder_override(self, emb: torch.Tensor | None) -> None:
-        """When set, the uncond half of the CFG batch uses ``emb`` (shape ``[B, …]`` as cond); ``None`` uses ``model.null_condition_emb``."""
         self._null_encoder_override = emb
 
     def reset_guidance_layout(self) -> None:
-        """Clear CFG batch expansion state and null override (e.g. between NTI outer steps or after forward)."""
         self._cfg_batch_expanded = False
         self._null_encoder_override = None
 
     def collapse_cfg_batch_layout(self, model_condition: ModelCondition) -> None:
-        """If conditioning was expanded to ``[cond, null]``, keep only ``cond`` rows and clear KV."""
         if not self._cfg_batch_expanded:
             return
         enc = model_condition.encoder_hidden_states
@@ -107,7 +94,6 @@ class GuidanceStepper(BaseStepper):
         self.reset_guidance_layout()
 
     def reset_apg_momentum_for_nti_inner(self) -> None:
-        """Fresh APG buffer for each NTI inner iteration."""
         if self.guidance_mode is GuidanceMode.APG:
             self._apg_buffer = MomentumBuffer(momentum=self._apg_momentum)
 
@@ -158,7 +144,6 @@ class GuidanceStepper(BaseStepper):
         return True
 
     def _refresh_encoder_uncond_half(self, model: torch.nn.Module, model_condition: ModelCondition) -> None:
-        """Rebuild ``[cond, null]`` along batch dim when layout is already 2B (NTI / per-step null)."""
         if not self._cfg_batch_expanded:
             return
         enc_full = model_condition.encoder_hidden_states
@@ -185,7 +170,6 @@ class GuidanceStepper(BaseStepper):
         past_key_values: Any,
         is_heun_corrector: bool,
     ) -> tuple[torch.Tensor, Any]:
-        """Returns ``(v_b, new_past_key_values)`` with shape ``v_b`` matching ``x_b`` batch."""
         bsz = x_b.shape[0]
         x2 = torch.cat([x_b, x_b], dim=0)
         device, dtype = x_b.device, x_b.dtype
@@ -285,7 +269,6 @@ class GuidanceStepper(BaseStepper):
             model_condition.past_key_values = new_pkv
             return StepperPayload(x=x - v * dt, v=v)
 
-        # Heun + guidance
         if model_condition.past_key_values is None:
             model_condition.past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
         v1, new_pkv = self._guided_velocity(

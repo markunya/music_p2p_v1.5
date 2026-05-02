@@ -1,7 +1,3 @@
-"""Rescale cross-attention weights along the key axis (no renormalization; PTP null-text reweight style)."""
-
-from __future__ import annotations
-
 import torch
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf

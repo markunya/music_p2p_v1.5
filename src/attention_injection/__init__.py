@@ -1,5 +1,3 @@
-"""Attention injection: mappers, DiT cross-attn controllers, eager hook."""
-
 from src.attention_injection.bundle import (
     AttentionInjectionBundle,
     EncoderSegmentLayout,

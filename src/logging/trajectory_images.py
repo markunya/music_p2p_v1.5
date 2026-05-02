@@ -1,7 +1,3 @@
-"""False-color 2D views of latent tensors → Comet ``log_image`` (optional, heavy)."""
-
-from __future__ import annotations
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -18,7 +14,6 @@ def _scalar_to_rgb_viridis(t01: np.ndarray) -> np.ndarray:
 
 
 def _latent_matrix_falsecolor_uint8(mat: np.ndarray, *, max_edge: int) -> np.ndarray:
-    """``(H, W)`` float → min-max Viridis → ``uint8`` ``H×W×3``, optional downscale."""
     lo, hi = float(mat.min()), float(mat.max())
     if hi - lo < 1e-8:
         t01 = np.zeros(mat.shape, dtype=np.float32)
@@ -45,7 +40,6 @@ def log_latent_trajectory_images(
     prefix: str,
     max_edge: int = 4096,
 ) -> None:
-    """Log each batch item as a 2D false-color grid (channels × length), Comet ``step`` = diffusion index."""
     if isinstance(writer, DummyWriter) or not trajectory:
         return
     bsz = int(trajectory[0].shape[0])

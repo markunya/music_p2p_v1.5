@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Optional
 
 import torch
@@ -22,7 +20,6 @@ from src.utils.conditioning import ModelCondition
 
 
 class _DecoderWithRuntimeController(torch.nn.Module):
-    """``model.decoder`` must stay an ``nn.Module``; we only wrap ``forward`` to set the attention controller."""
 
     def __init__(self, inner: torch.nn.Module, controller: AttentionControllerBase) -> None:
         super().__init__()
@@ -184,7 +181,6 @@ class ForwardPipeline:
                 if isinstance(self._stepper, GuidanceStepper):
                     if npe is not None and i < len(npe):
                         ne = npe[i].to(device=device, dtype=dtype)
-                        # Do not use ``encoder_hidden_states.shape[0]``: under CFG it is ``2 * latent_bsz``.
                         latent_bsz = int(x.shape[0])
                         if ne.shape[0] == 1 and latent_bsz > 1:
                             ne = ne.expand(latent_bsz, *ne.shape[1:])

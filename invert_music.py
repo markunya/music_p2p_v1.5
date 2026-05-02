@@ -1,7 +1,3 @@
-"""Invert a clip to latent noise and optionally save a ``.pt`` artifact (Hydra)."""
-
-from __future__ import annotations
-
 import warnings
 from pathlib import Path
 
@@ -24,7 +20,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def _load_stereo_wav(path: str, target_sr: int) -> torch.Tensor:
-    """Load WAV/FLAC, mix to stereo, resample to ``target_sr``. Returns ``[2, T]`` float32."""
     wav, sr = torchaudio.load(path)
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)
@@ -82,7 +77,6 @@ def main(cli_cfg: DictConfig) -> None:
     writer = setup_writer(cli_cfg)
     try:
         writer.add_audio("inv/input/source_stereo", wav, sample_rate=int(handler.sample_rate))
-        # ``no_grad``: same as inversion — NTI must not see inference-only tensors on ``ModelCondition``.
         with torch.no_grad():
             cond = prepare_conditions(handler, prompts, float(cli_cfg.duration))
             clean_latents = encode_clean_latents(

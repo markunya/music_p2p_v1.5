@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -59,7 +57,6 @@ class BaseStepper(ABC):
         t_scalar: torch.Tensor,
         model_condition: ModelCondition,
     ) -> torch.Tensor:
-        """Decoder eval with KV cache stored on ``model_condition`` (predictor / Euler)."""
         if model_condition.past_key_values is None:
             model_condition.past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
         vt, new_pkv = BaseStepper.decoder_velocity(
@@ -80,7 +77,6 @@ class BaseStepper(ABC):
         t_scalar: torch.Tensor,
         model_condition: ModelCondition,
     ) -> torch.Tensor:
-        """Decoder eval with a fresh KV cache (Heun corrector); main cache untouched."""
         fresh = EncoderDecoderCache(DynamicCache(), DynamicCache())
         vt, _ = BaseStepper.decoder_velocity(
             model,

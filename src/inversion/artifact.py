@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,7 +9,6 @@ ARTIFACT_VERSION = 2
 
 @dataclass
 class InversionArtifact:
-    """Inverted noise state and minimal metadata for ``generate.py`` warm-start."""
 
     noise: torch.Tensor
     forward_start_step_index: int = 0
@@ -21,7 +18,6 @@ class InversionArtifact:
 
     @classmethod
     def from_noise(cls, noise: torch.Tensor) -> "InversionArtifact":
-        """In-memory artifact with noise only (no NTI, not saved to disk)."""
         return cls(noise=noise.detach(), null_embeddings_per_step=None)
 
     def to_state_dict(self) -> dict[str, Any]:

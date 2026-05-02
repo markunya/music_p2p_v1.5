@@ -1,7 +1,3 @@
-"""Tensor helpers for attention key layout (ACE-Step eager: ``(B, H, Q, K)`` or ``(H, Q, K)``)."""
-
-from __future__ import annotations
-
 import torch
 
 

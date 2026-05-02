@@ -1,7 +1,3 @@
-"""Batch text conditioning → ``prepare_condition`` tensors for DiT."""
-
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Any, List, Tuple
 
@@ -32,7 +28,6 @@ class ModelCondition:
 
 
 def _unpack_preprocess_tuple(processed_data: Tuple[Any, ...]) -> dict[str, Any]:
-    """Mirror ``ServiceGenerateExecuteMixin._unpack_service_processed_data``."""
     (
         keys,
         text_inputs,
@@ -85,10 +80,6 @@ def _prompts_to_lists(prompts: List[PromptConfig]) -> tuple[list[str], list[str]
 
 
 def _silent_target_wavs(handler: Any, batch_size: int, duration: float) -> torch.Tensor:
-    """Placeholder stereo waveform batch: ``_prepare_batch`` requires a tensor, not ``None``.
-
-    Silent audio yields silence latents inside ACE-Step ``_prepare_target_latents_and_wavs``.
-    """
     sr = int(getattr(handler, "sample_rate", 48000))
     seconds = float(duration) if duration is not None and float(duration) > 0 else 30.0
     n_samples = max(int(seconds * sr), sr // 10)
@@ -102,7 +93,6 @@ def _silent_target_wavs(handler: Any, batch_size: int, duration: float) -> torch
 
 
 def _pad_latent_time(lat: torch.Tensor, target_t: int) -> torch.Tensor:
-    """Pad or crop latent time dim ``T`` to ``target_t``. ``lat`` is ``[B, T, C]``."""
     if lat.dim() != 3:
         raise ValueError(f"Expected latents [B, T, C], got shape {tuple(lat.shape)}")
     _b, t, _c = lat.shape
@@ -199,7 +189,6 @@ def prepare_conditions(
 
 
 def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[PromptConfig]:
-    """Expand a single Hydra ``prompt`` config node to ``batch_size`` `PromptConfig` instances."""
     d = OmegaConf.to_container(prompt_cfg, resolve=True)
     if not isinstance(d, dict):
         raise TypeError("prompt config must resolve to a dict")
@@ -212,7 +201,6 @@ def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[Pro
 
 
 def prompt_config_from_hydra_node(prompt_node: Any) -> PromptConfig:
-    """Single ``PromptConfig`` from a Hydra prompt subnode (e.g. ``cfg.p2p_task.src``)."""
     d = OmegaConf.to_container(prompt_node, resolve=True)
     if not isinstance(d, dict):
         raise TypeError("prompt node must resolve to a dict")
@@ -224,7 +212,6 @@ def prompt_config_from_hydra_node(prompt_node: Any) -> PromptConfig:
 
 
 def p2p_src_tgt_prompt_configs(p2p_task_cfg: Any) -> List[PromptConfig]:
-    """``[src, tgt]`` from Hydra ``p2p_task`` (nodes ``src`` / ``tgt`` from ``prompt@p2p_task.*``)."""
     src = OmegaConf.select(p2p_task_cfg, "src", default=None)
     tgt = OmegaConf.select(p2p_task_cfg, "tgt", default=None)
     if src is None or tgt is None:

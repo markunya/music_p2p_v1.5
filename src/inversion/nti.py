@@ -19,6 +19,12 @@ class _CheckpointedLayer(nn.Module):
         super().__init__()
         self.inner = inner
 
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.inner, name)
+
     def forward(self, *args, **kwargs):
         def fn(*a):
             return self.inner(*a, **kwargs)

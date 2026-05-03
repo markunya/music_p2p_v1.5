@@ -15,7 +15,7 @@ from src.attention_injection.eager_hook import (
     set_runtime_controller,
 )
 from src.steppers.base import BaseStepper
-from src.steppers.guidance import GuidanceStepper
+from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
 
 
@@ -196,7 +196,7 @@ class ForwardPipeline:
 
         try:
             for i in tqdm(indices, total=len(indices), desc=f"Forward ({step_name})"):
-                if isinstance(self._stepper, GuidanceStepper):
+                if isinstance(self._stepper, CFG_GUIDANCE_STEPPERS):
                     npe_idx = i - start
                     if npe is not None and 0 <= npe_idx < len(npe):
                         ne = npe[npe_idx].to(device=device, dtype=dtype)
@@ -224,7 +224,7 @@ class ForwardPipeline:
                     x = torch.cat([x_src_new, x_tgt_new], dim=0)
                 traj.append(x.detach().clone())
 
-            if isinstance(self._stepper, GuidanceStepper):
+            if isinstance(self._stepper, CFG_GUIDANCE_STEPPERS):
                 self._stepper.collapse_cfg_batch_layout(model_condition)
         finally:
             if prev_attn_impl is not None and dit is not None and hasattr(dit, "config"):

@@ -86,11 +86,8 @@ def main(cli_cfg: DictConfig) -> None:
     try:
         writer.add_audio("edit/input/source_stereo", wav, sample_rate=int(handler.sample_rate))
         with torch.no_grad():
-            cond_inv = prepare_conditions(
-                handler,
-                src_tgt[:1],
-                float(cli_cfg.duration),
-            )
+            cond_fwd = prepare_conditions(handler, src_tgt, float(cli_cfg.duration))
+            cond_inv = cond_fwd.slice(0, 1)
             clean_latents = encode_clean_latents(
                 handler,
                 wav,
@@ -111,7 +108,6 @@ def main(cli_cfg: DictConfig) -> None:
         controller.build(handler=handler, cfg=cli_cfg, writer=writer)
 
         with torch.inference_mode():
-            cond_fwd = prepare_conditions(handler, src_tgt, float(cli_cfg.duration))
             fwd = ForwardPipeline(cli_cfg, attention_controller=controller)
             out = fwd.run(model, model_condition=cond_fwd, inversion_artifact=artifact)
 

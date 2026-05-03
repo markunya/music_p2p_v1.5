@@ -1,4 +1,4 @@
-# Null-text optimization (runs after inversion when ``enabled``; uses ``cfg.stepper`` = GuidanceStepper).
+# Null-text optimization (runs after inversion when ``enabled``; uses ``cfg.stepper`` = GuidanceStepperEuler, GuidanceStepperHeun, UniEulerGuidanceStepper, or UniHeunGuidanceStepper).
 enabled: false
 lr: 1.0e-2
 num_inner_steps: 10

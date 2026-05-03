@@ -10,7 +10,7 @@ from src.inversion.artifact import InversionArtifact
 from src.logging.trajectory_logging import log_latent_trajectory, trajectory_image_flags
 from src.logging.writer import BaseWriter, DummyWriter
 from src.steppers.base import BaseStepper
-from src.steppers.guidance import GuidanceStepper
+from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
 
 
@@ -26,9 +26,9 @@ class InversionPipeline:
         self._alpha: float = float(OmegaConf.select(cfg, "alpha", default=1.0))
         if not (0.0 <= self._alpha <= 1.0):
             raise ValueError(f"alpha must be in [0, 1], got {self._alpha}")
-        if type(self._stepper) is GuidanceStepper:
+        if isinstance(self._stepper, CFG_GUIDANCE_STEPPERS):
             logger.warning(
-                "InversionPipeline: GuidanceStepper is not recommended for inversion in v1 (2B CFG + KV); "
+                "InversionPipeline: CFG guidance stepper is not recommended for inversion in v1 (2B CFG + KV); "
                 "prefer euler/heun/uni_*."
             )
 

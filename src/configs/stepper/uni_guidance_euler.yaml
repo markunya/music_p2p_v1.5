@@ -1,5 +1,2 @@
-_target_: src.steppers.uni_guidance.UniGuidanceStepper
+_target_: src.steppers.guidance.UniEulerGuidanceStepper
 guidance_scale: 1.5
-guidance_mode: cfg
-base_stepper:
-  _target_: src.steppers.euler.Euler

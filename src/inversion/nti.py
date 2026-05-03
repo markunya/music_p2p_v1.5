@@ -8,13 +8,21 @@ from torch.optim import AdamW
 from tqdm import tqdm
 
 from src.logging.writer import BaseWriter, DummyWriter
-from src.steppers.guidance import GuidanceStepper
+from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
 
 
 def _lr_outer(j: int, n_infer: int, lr: float) -> float:
     denom = max(n_infer - 1, 1)
     return float(lr + (lr / 2.0 - lr) * (j / denom))
+
+
+def _cfg_blend_interval(guidance_stepper: Any, t_curr: torch.Tensor) -> bool:
+    """Same condition as guidance ``_in_cfg_interval`` (cfg_forward applied at ``t_curr``)."""
+    t = float(t_curr)
+    ts = float(guidance_stepper.cfg_t_start)
+    te = float(guidance_stepper.cfg_t_end)
+    return ts <= t <= te
 
 
 class NullTextOptimization:
@@ -40,7 +48,7 @@ class NullTextOptimization:
         *,
         trajectory: List[torch.Tensor],
         model_condition: ModelCondition,
-        guidance_stepper: GuidanceStepper,
+        guidance_stepper: Any,
         infer_steps: int,
         forward_start_step_index: int = 0,
     ) -> List[torch.Tensor]:
@@ -85,6 +93,9 @@ class NullTextOptimization:
             lr_j = _lr_outer(j, n_outer, self._lr)
 
             use_prev = self._init_from_previous_outer and j > 0 and null_emb_prev is not None
+            in_cfg = _cfg_blend_interval(guidance_stepper, t_curr)
+            n_inner = self._num_inner if in_cfg else 1
+
             if use_prev:
                 null_emb = null_emb_prev.detach().clone().requires_grad_(True)
             else:
@@ -95,11 +106,10 @@ class NullTextOptimization:
             guidance_stepper.reset_guidance_layout()
             optimizer = AdamW([null_emb], lr=lr_j, weight_decay=0.1)
 
-            for k in range(self._num_inner):
+            for k in range(n_inner):
                 guidance_stepper.reset_guidance_layout()
                 cond_nti = cond_base.clone()
                 cond_nti.past_key_values = None
-                guidance_stepper.reset_apg_momentum_for_nti_inner()
                 guidance_stepper.set_null_encoder_override(null_emb)
 
                 payload = guidance_stepper.step(
@@ -118,7 +128,7 @@ class NullTextOptimization:
                 self._writer.add_scalar("nti/loss", float(loss.item()), step=global_step)
                 self._writer.add_scalar("nti/lr_outer", lr_j, step=global_step)
 
-                if float(loss.item()) < self._epsilon:
+                if in_cfg and float(loss.item()) < self._epsilon:
                     break
 
             self._writer.add_scalar(
@@ -152,8 +162,10 @@ class NullTextOptimization:
 
 
 def validate_nti_prerequisites(model: Any, stepper: Any) -> None:
-    if not isinstance(stepper, GuidanceStepper):
-        raise TypeError("NTI requires cfg.stepper to instantiate GuidanceStepper")
+    if not isinstance(stepper, CFG_GUIDANCE_STEPPERS):
+        raise TypeError(
+            "NTI requires cfg.stepper to be GuidanceStepperEuler, GuidanceStepperHeun, UniEulerGuidanceStepper, or UniHeunGuidanceStepper"
+        )
     if float(stepper.guidance_scale) <= 1.0:
         raise ValueError("NTI requires guidance_scale > 1")
     if not hasattr(model, "null_condition_emb"):

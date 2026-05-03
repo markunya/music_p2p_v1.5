@@ -26,6 +26,15 @@ class ModelCondition:
             past_key_values=None,
         )
 
+    def slice(self, start: int, end: int) -> "ModelCondition":
+        return ModelCondition(
+            encoder_hidden_states=self.encoder_hidden_states[start:end].clone(),
+            encoder_attention_mask=self.encoder_attention_mask[start:end].clone(),
+            context_latents=self.context_latents[start:end].clone(),
+            attention_mask=self.attention_mask[start:end].clone(),
+            past_key_values=None,
+        )
+
 
 def _unpack_preprocess_tuple(processed_data: Tuple[Any, ...]) -> dict[str, Any]:
     (

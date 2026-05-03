@@ -1,5 +1,2 @@
-_target_: src.steppers.guidance.GuidanceStepper
+_target_: src.steppers.guidance.GuidanceStepperHeun
 guidance_scale: 3.0
-guidance_mode: cfg
-base_stepper:
-  _target_: src.steppers.heun.Heun

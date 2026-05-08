@@ -112,6 +112,7 @@ class NullTextOptimization:
             model.decoder.layers = nn.ModuleList(
                 [_CheckpointedLayer(l) for l in layers_orig]
             )
+            guidance_stepper.set_forbid_decoder_kv_cache(True)
             logger.info("NTI: gradient checkpointing enabled on {} decoder layers", len(layers_orig))
 
         try:
@@ -186,6 +187,8 @@ class NullTextOptimization:
                 guidance_stepper.set_null_encoder_override(None)
                 guidance_stepper.reset_guidance_layout()
         finally:
+            if self._grad_ckpt:
+                guidance_stepper.set_forbid_decoder_kv_cache(False)
             if layers_orig is not None:
                 model.decoder.layers = nn.ModuleList(layers_orig)
 

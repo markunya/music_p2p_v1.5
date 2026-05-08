@@ -20,6 +20,11 @@ class _GuidanceCfgCore:
         self._null_warned = False
         self._null_encoder_override: torch.Tensor | None = None
         self._null_seq_align_warned = False
+        self._forbid_decoder_kv_cache = False
+
+    def set_forbid_decoder_kv_cache(self, forbid: bool) -> None:
+        """When True, CFG decoder uses no KV cache (needed for NTI per-layer torch.checkpoint)."""
+        self._forbid_decoder_kv_cache = bool(forbid)
 
     def set_null_encoder_override(self, emb: torch.Tensor | None) -> None:
         self._null_encoder_override = emb
@@ -131,6 +136,10 @@ class _GuidanceCfgCore:
         x2 = torch.cat([x_b, x_b], dim=0)
         device, dtype = x_b.device, x_b.dtype
         t_tensor = t_scalar * torch.ones((x2.shape[0],), device=device, dtype=dtype)
+        use_cache_eff = use_cache and not self._forbid_decoder_kv_cache
+        # Cross-attention still mutates EncoderDecoderCache whenever it is non-None (see AceStepAttention:
+        # the cross path keys off past_key_value, not use_cache). Per-layer checkpoint requires no cache.
+        pkv_for_decoder = past_key_values if use_cache_eff else None
         out = model.decoder(
             hidden_states=x2,
             timestep=t_tensor,
@@ -139,8 +148,8 @@ class _GuidanceCfgCore:
             encoder_hidden_states=model_condition.encoder_hidden_states,
             encoder_attention_mask=model_condition.encoder_attention_mask,
             context_latents=model_condition.context_latents,
-            use_cache=use_cache,
-            past_key_values=past_key_values,
+            use_cache=use_cache_eff,
+            past_key_values=pkv_for_decoder,
         )
         vt2, new_pkv = out[0], out[1]
         pred_cond, pred_null = vt2.chunk(2, dim=0)

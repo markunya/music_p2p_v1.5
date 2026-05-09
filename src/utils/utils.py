@@ -1,7 +1,7 @@
 import os
 import random
 from pathlib import Path
-
+import math
 import numpy as np
 import torch
 from hydra.utils import get_original_cwd
@@ -38,3 +38,10 @@ def resolve_against_original_cwd(path: str) -> str:
     if p.is_absolute():
         return str(p.resolve())
     return str((Path(get_original_cwd()) / p).resolve())
+
+def make_time_grid(n: int, device, dtype, ratio: float = 1.0) -> torch.Tensor:
+    u = torch.linspace(0.0, 1.0, n + 1, device=device, dtype=dtype)
+    a = math.log(ratio)
+    tau = (torch.exp(a * u) - 1.0) / (math.exp(a) - 1.0)
+    t = 1.0 - tau
+    return t

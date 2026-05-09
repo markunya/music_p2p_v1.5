@@ -1,0 +1,6 @@
+_target_: src.steppers.guidance.GuidanceContinuationInversionStepper
+guidance_scale: 2.0
+cfg_t_start: 0.0
+cfg_t_end: 1.0
+# Inner fixed-point iterations per ODE step (ramps CFG from 1.0 to guidance_scale).
+continuation_steps: 10

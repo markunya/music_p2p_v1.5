@@ -17,7 +17,7 @@ from src.attention_injection.eager_hook import (
 from src.steppers.base import BaseStepper
 from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
-
+from src.utils.utils import make_time_grid
 
 class _DecoderWithRuntimeController(torch.nn.Module):
 
@@ -134,7 +134,7 @@ class ForwardPipeline:
 
         model_condition.past_key_values = None
 
-        t = torch.linspace(1.0, 0.0, self._infer_steps + 1, device=device, dtype=dtype)
+        t = make_time_grid(self._infer_steps, device, dtype, ratio=self._cfg.time_grid_ratio)
         traj: list[torch.Tensor] = [x.detach().clone()]
         start = int(inversion_artifact.forward_start_step_index)
         if start < 0 or start > self._infer_steps:

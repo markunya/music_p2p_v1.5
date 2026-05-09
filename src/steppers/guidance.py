@@ -360,4 +360,214 @@ class UniHeunGuidanceStepper(GuidanceStepperHeun):
         return StepperPayload(x=x_new, v=u_next)
 
 
-CFG_GUIDANCE_STEPPERS = (GuidanceStepperEuler, GuidanceStepperHeun, UniEulerGuidanceStepper, UniHeunGuidanceStepper)
+class GuidanceContinuationInversionStepper(_GuidanceCfgCore, BaseStepper):
+    _START_GUIDANCE_SCALE = 1.0
+
+    def __init__(
+        self,
+        guidance_scale: float = 2.0,
+        cfg_t_start: float = 0.0,
+        cfg_t_end: float = 1.0,
+        continuation_steps: int = 10,
+        j_approx: bool = False,
+        j_eps: float = 1e-3,
+    ) -> None:
+        self._init_guidance_cfg(guidance_scale, cfg_t_start, cfg_t_end)
+        self.continuation_steps = int(continuation_steps)
+        self.j_approx = bool(j_approx)
+        self.j_eps = float(j_eps)
+
+        self.base_solver = UniEulerGuidanceStepper(
+            guidance_scale=self._START_GUIDANCE_SCALE,
+            cfg_t_start=cfg_t_start,
+            cfg_t_end=cfg_t_end,
+        )
+
+    def _collapse_cfg_batch_layout_keep_override(
+        self,
+        model_condition: ModelCondition,
+    ) -> None:
+        if not self._cfg_batch_expanded:
+            return
+
+        enc = model_condition.encoder_hidden_states
+        b = enc.shape[0] // 2
+
+        model_condition.encoder_hidden_states = enc[:b].contiguous()
+        model_condition.encoder_attention_mask = (
+            model_condition.encoder_attention_mask[:b].contiguous()
+        )
+        model_condition.context_latents = model_condition.context_latents[:b].contiguous()
+        model_condition.attention_mask = model_condition.attention_mask[:b].contiguous()
+        model_condition.past_key_values = None
+
+        self._cfg_batch_expanded = False
+
+    def _cond_null_velocity(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model_condition: ModelCondition,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        old_pkv = model_condition.past_key_values
+        model_condition.past_key_values = None
+
+        try:
+            self._ensure_cfg_batch_layout(model, model_condition)
+            self._refresh_encoder_uncond_half(model, model_condition)
+
+            x2 = torch.cat([x, x], dim=0)
+            t_tensor = t * torch.ones((x2.shape[0],), device=x.device, dtype=x.dtype)
+
+            out = model.decoder(
+                hidden_states=x2,
+                timestep=t_tensor,
+                timestep_r=t_tensor,
+                attention_mask=model_condition.attention_mask,
+                encoder_hidden_states=model_condition.encoder_hidden_states,
+                encoder_attention_mask=model_condition.encoder_attention_mask,
+                context_latents=model_condition.context_latents,
+                use_cache=False,
+                past_key_values=None,
+            )
+
+            v2 = out[0]
+            v_cond, v_null = v2.chunk(2, dim=0)
+            return v_cond, v_null
+
+        finally:
+            self._collapse_cfg_batch_layout_keep_override(model_condition)
+            model_condition.past_key_values = old_pkv
+
+    def _velocity_from_cond_null(
+        self,
+        v_cond: torch.Tensor,
+        v_null: torch.Tensor,
+        scale: float,
+    ) -> torch.Tensor:
+        return cfg_forward(v_cond, v_null, float(scale))
+
+    def _velocity_at_scale(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model_condition: ModelCondition,
+        scale: float,
+    ) -> torch.Tensor:
+        v_cond, v_null = self._cond_null_velocity(
+            model,
+            x,
+            t,
+            model_condition,
+        )
+        return self._velocity_from_cond_null(v_cond, v_null, scale)
+
+    def _jvp_approx(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        model_condition: ModelCondition,
+        scale: float,
+        direction: torch.Tensor,
+        v_x: torch.Tensor,
+    ) -> torch.Tensor:
+        eps = self.j_eps
+
+        v_shifted = self._velocity_at_scale(
+            model,
+            x + eps * direction,
+            t,
+            model_condition,
+            scale,
+        )
+
+        return (v_shifted - v_x) / eps
+
+    def step(
+        self,
+        model: torch.nn.Module,
+        x: torch.Tensor,
+        *,
+        t_curr: torch.Tensor,
+        t_next: torch.Tensor,
+        model_condition: ModelCondition,
+    ) -> StepperPayload:
+        dt = self._segment_dt_tensor(
+            dt=t_curr - t_next,
+            bsz=x.shape[0],
+            device=x.device,
+            dtype=x.dtype,
+        )
+
+        target_scale = self.guidance_scale
+        old_pkv = model_condition.past_key_values
+
+        self._collapse_cfg_batch_layout_keep_override(model_condition)
+
+        self.base_solver.guidance_scale = self._START_GUIDANCE_SCALE
+        self.base_solver.set_null_encoder_override(self._null_encoder_override)
+        self.base_solver.set_forbid_decoder_kv_cache(self._forbid_decoder_kv_cache)
+
+        model_condition.past_key_values = None
+        payload = self.base_solver.step(
+            model,
+            x,
+            t_curr=t_curr,
+            t_next=t_next,
+            model_condition=model_condition,
+        )
+
+        x_s = payload.x
+        v_s = payload.v
+
+        prev_scale = self._START_GUIDANCE_SCALE
+
+        for k in range(1, self.continuation_steps + 1):
+            scale = self._START_GUIDANCE_SCALE + (
+                target_scale - self._START_GUIDANCE_SCALE
+            ) * k / self.continuation_steps
+
+            ds = scale - prev_scale
+
+            v_cond, v_null = self._cond_null_velocity(
+                model,
+                x_s,
+                t_next,
+                model_condition,
+            )
+
+            dv_ds = v_cond - v_null
+            v_s = self._velocity_from_cond_null(v_cond, v_null, scale)
+
+            if self.j_approx:
+                jvp = self._jvp_approx(
+                    model,
+                    x_s,
+                    t_next,
+                    model_condition,
+                    scale,
+                    dv_ds,
+                    v_s,
+                )
+                direction = dv_ds - dt * jvp
+            else:
+                direction = dv_ds
+
+            x_s = x_s - dt * ds * direction
+            prev_scale = scale
+
+        self.guidance_scale = target_scale
+        model_condition.past_key_values = old_pkv
+
+        return StepperPayload(x=x_s, v=v_s)
+
+CFG_GUIDANCE_STEPPERS = (
+    GuidanceStepperEuler,
+    GuidanceStepperHeun,
+    UniEulerGuidanceStepper,
+    UniHeunGuidanceStepper,
+    GuidanceContinuationInversionStepper
+)

@@ -12,7 +12,7 @@ from tqdm import tqdm
 from src.logging.writer import BaseWriter, DummyWriter
 from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
-
+from src.utils.utils import make_time_grid
 
 class _CheckpointedLayer(nn.Module):
     def __init__(self, inner: nn.Module) -> None:
@@ -91,7 +91,7 @@ class NullTextOptimization:
                 f"infer_steps - forward_start + 1 = {expected_len} (infer_steps={infer_steps}, start={start})"
             )
 
-        t = torch.linspace(1.0, 0.0, infer_steps + 1, device=device, dtype=dtype)
+        t = make_time_grid(infer_steps, device, dtype, ratio=self._cfg.time_grid_ratio)
         null_stored: List[torch.Tensor] = []
         latent_cur = rev_traj[0].detach().to(device=device, dtype=dtype)
         null_emb_prev: torch.Tensor | None = None
@@ -199,7 +199,8 @@ class NullTextOptimization:
 def validate_nti_prerequisites(model: Any, stepper: Any) -> None:
     if not isinstance(stepper, CFG_GUIDANCE_STEPPERS):
         raise TypeError(
-            "NTI requires cfg.stepper to be GuidanceStepperEuler, GuidanceStepperHeun, UniEulerGuidanceStepper, or UniHeunGuidanceStepper"
+            "NTI requires cfg.stepper to be one of CFG_GUIDANCE_STEPPERS "
+            "(GuidanceStepperEuler/Heun, UniEuler/UniHeun guidance, GuidanceContinuationInversionStepper)"
         )
     if float(stepper.guidance_scale) <= 1.0:
         raise ValueError("NTI requires guidance_scale > 1")

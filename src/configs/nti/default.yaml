@@ -1,4 +1,4 @@
-# Null-text optimization (runs after inversion when ``enabled``; uses ``cfg.stepper`` = GuidanceStepperEuler, GuidanceStepperHeun, UniEulerGuidanceStepper, or UniHeunGuidanceStepper).
+# Null-text optimization (runs after inversion when ``enabled``; ``cfg.stepper`` must be a CFG guidance stepper — see ``CFG_GUIDANCE_STEPPERS`` in ``src/steppers/guidance.py``).
 enabled: false
 lr: 1.0e-2
 num_inner_steps: 10

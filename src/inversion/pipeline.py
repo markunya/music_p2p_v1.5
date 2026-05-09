@@ -1,6 +1,7 @@
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 from hydra.utils import instantiate
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -12,6 +13,7 @@ from src.logging.writer import BaseWriter, DummyWriter
 from src.steppers.base import BaseStepper
 from src.steppers.guidance import CFG_GUIDANCE_STEPPERS
 from src.utils.conditioning import ModelCondition
+from src.utils.utils import make_time_grid
 
 
 class InversionPipeline:
@@ -31,6 +33,13 @@ class InversionPipeline:
                 "InversionPipeline: CFG guidance stepper is not recommended for inversion in v1 (2B CFG + KV); "
                 "prefer euler/heun/uni_*."
             )
+        self._forward_stepper: BaseStepper | None = None
+        if bool(OmegaConf.select(cfg, "log_local_error", default=False)):
+            self._forward_stepper = instantiate(cfg.stepper)
+            logger.info(
+                "InversionPipeline: log_local_error — forward probe stepper {}",
+                type(self._forward_stepper).__name__,
+            )
 
     def _inversion_steps_count(self) -> int:
         k = int(round(self._alpha * self._infer_steps))
@@ -42,6 +51,7 @@ class InversionPipeline:
         *,
         clean_latents: torch.Tensor,
         model_condition: ModelCondition,
+        writer: BaseWriter | None = None,
     ) -> list[torch.Tensor]:
         device = clean_latents.device
         dtype = clean_latents.dtype
@@ -49,10 +59,14 @@ class InversionPipeline:
 
         n = self._infer_steps
         k = self._inversion_steps_count()
-        t = torch.linspace(1.0, 0.0, n + 1, device=device, dtype=dtype)
+        t = make_time_grid(n, device, dtype, ratio=self._cfg.time_grid_ratio)
         traj: list[torch.Tensor] = [x.detach().clone()]
         desc = f"Inversion ({type(self._stepper).__name__})"
-        for i in tqdm(range(n - 1, n - 1 - k, -1), total=k, desc=desc):
+        fwd = self._forward_stepper
+        for step_idx, i in enumerate(
+            tqdm(range(n - 1, n - 1 - k, -1), total=k, desc=desc)
+        ):
+            x_old = x.detach().clone() if fwd is not None else None
             t_curr = t[i + 1]
             t_next = t[i]
             payload = self._stepper.step(
@@ -64,6 +78,35 @@ class InversionPipeline:
             )
             x = payload.x
             traj.append(x.detach().clone())
+
+            if fwd is not None and x_old is not None:
+                if isinstance(self._stepper, CFG_GUIDANCE_STEPPERS):
+                    self._stepper.collapse_cfg_batch_layout(model_condition)
+                cond = model_condition.clone()
+                x_hat = fwd.step(
+                    model=model,
+                    x=x,
+                    t_curr=t[i],
+                    t_next=t[i + 1],
+                    model_condition=cond,
+                ).x
+                if isinstance(fwd, CFG_GUIDANCE_STEPPERS):
+                    fwd.collapse_cfg_batch_layout(cond)
+                mse = float(F.mse_loss(x_hat.float(), x_old.float()).item())
+                dt_val = float((t[i] - t[i + 1]).item())
+                mse_per_dt = mse / max(dt_val, 1e-12)
+                logger.info(
+                    "Inversion local error: step={} grid_i={} t_fwd=({}, {}) dt={:.6e} mse={:.6e} mse/dt={:.6e}",
+                    step_idx,
+                    i,
+                    float(t[i]),
+                    float(t[i + 1]),
+                    dt_val,
+                    mse,
+                    mse_per_dt,
+                )
+                if writer is not None:
+                    writer.add_scalar("inv/local_error_mse_per_dt", mse_per_dt, step=step_idx)
         return traj
 
     def run(
@@ -90,17 +133,18 @@ class InversionPipeline:
 
         model_condition_for_nti = model_condition.clone() if nti_on else None
 
+        log_w = writer if writer is not None else DummyWriter()
+
         with torch.no_grad():
             trajectory = self._build_inversion_trajectory(
                 model,
                 clean_latents=clean_latents,
                 model_condition=model_condition,
+                writer=writer,
             )
         noise = trajectory[-1].detach().cpu()
         stepper_name = type(self._stepper).__name__
         null_per_step: list[torch.Tensor] | None = None
-
-        log_w = writer if writer is not None else DummyWriter()
 
         if nti_on:
             from src.inversion.nti import NullTextOptimization, validate_nti_prerequisites

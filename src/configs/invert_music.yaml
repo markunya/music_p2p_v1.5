@@ -22,3 +22,9 @@ alpha: 1.0
 # Comet: false-color latent grids along inversion only (expensive).
 log_trajectory_images: false
 log_trajectory_max_edge: 4096
+
+# After each inversion step: one forward ``stepper`` step (same time edge as ForwardPipeline) and
+# MSE(x_hat, x_before) / dt (forward time step); compares ``invert_stepper`` vs ``stepper`` on one grid.
+# Logged via loguru and ``writer.add_scalar`` ``inv/local_error_mse_per_dt`` (Comet when writer is CometMLWriter).
+log_local_error: false
+time_grid_ratio: 5.0

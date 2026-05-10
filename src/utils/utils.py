@@ -40,6 +40,9 @@ def resolve_against_original_cwd(path: str) -> str:
     return str((Path(get_original_cwd()) / p).resolve())
 
 def make_time_grid(n: int, device, dtype, ratio: float = 1.0) -> torch.Tensor:
+    if abs(ratio - 1.0) < 1e-8:
+        return torch.linspace(1.0, 0.0, n + 1, device=device, dtype=dtype)
+        
     u = torch.linspace(0.0, 1.0, n + 1, device=device, dtype=dtype)
     a = math.log(ratio)
     tau = (torch.exp(a * u) - 1.0) / (math.exp(a) - 1.0)

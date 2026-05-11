@@ -3,6 +3,7 @@ from pathlib import Path
 
 import hydra
 import torch
+import torch.nn.functional as F
 import torchaudio
 from hydra.utils import instantiate
 from loguru import logger
@@ -117,6 +118,17 @@ def main(cli_cfg: DictConfig) -> None:
             log_latent_trajectory(writer, fwd_traj, prefix="edit/forward_latent", log_images=li, max_edge=me)
 
         x = out["final_latents"]
+        if bool(OmegaConf.select(cli_cfg, "log_edit_latent_recon_mse", default=True)):
+            if x.shape[0] >= 1:
+                ref = clean_latents.to(device=x.device, dtype=torch.float32)
+                pred = x[0:1].detach().to(dtype=torch.float32)
+                mse = float(F.mse_loss(pred, ref).item())
+                logger.info(
+                    "Edit latent recon MSE (clean pre-inv vs forward src branch): {:.6e}",
+                    mse,
+                )
+                writer.add_scalar("edit/latent_recon_mse_clean_vs_src", mse, step=0)
+
         latents_decode = x.transpose(1, 2).contiguous().to(handler.vae.dtype)
         wavs = handler.tiled_decode(latents_decode)
 

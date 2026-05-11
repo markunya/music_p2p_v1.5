@@ -5,7 +5,13 @@ defaults:
   - _self_
 
 _target_: src.steppers.opt_stepper.OptStepper
-lr: 0.01
+lr: 0.001
+lr_end: 0.0001
+# Optional ``lr_end``: linear schedule ``lr`` -> ``lr_end`` over inner steps (omit = constant ``lr``).
 num_steps: 10
 norm_boundary: 0.05
-epsilon: 1.0e-8
+epsilon: 1.0e-6
+# Gaussian regularization on x_opt each inner step: x_opt += std * randn; 0 = off.
+reg_noise_std: 0.0
+# If true, return ``x_init + delta`` with lowest observed loss; else last iterate after Adam.
+use_best_delta: true

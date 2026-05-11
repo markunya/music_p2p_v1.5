@@ -12,3 +12,7 @@ save_dir: _exps/p2p_edit
 # Optional local edit windows in seconds: [[start, end], ...].
 # If null/empty, ForwardPipeline uses full-range edit [[0, duration]].
 edit_regions: null
+
+# MSE between clean latents (pre-inversion encode) and forward ``final_latents[0]`` (src branch).
+# Logged to loguru and ``writer.add_scalar`` (Comet when writer is CometMLWriter).
+log_edit_latent_recon_mse: true

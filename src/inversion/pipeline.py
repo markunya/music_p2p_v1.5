@@ -59,7 +59,7 @@ class InversionPipeline:
 
         n = self._infer_steps
         k = self._inversion_steps_count()
-        t = make_time_grid(n, device, dtype, ratio=self._cfg.time_grid_ratio)
+        t = make_time_grid(n, device, dtype)
         traj: list[torch.Tensor] = [x.detach().clone()]
         desc = f"Inversion ({type(self._stepper).__name__})"
         fwd = self._forward_stepper

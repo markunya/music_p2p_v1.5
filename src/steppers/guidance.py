@@ -365,6 +365,7 @@ class GuidanceContinuationInversionStepper(_GuidanceCfgCore, BaseStepper):
 
     def __init__(
         self,
+        base_stepper: BaseStepper,
         guidance_scale: float = 2.0,
         cfg_t_start: float = 0.0,
         cfg_t_end: float = 1.0,
@@ -377,11 +378,7 @@ class GuidanceContinuationInversionStepper(_GuidanceCfgCore, BaseStepper):
         self.j_approx = bool(j_approx)
         self.j_eps = float(j_eps)
 
-        self.base_solver = UniEulerGuidanceStepper(
-            guidance_scale=self._START_GUIDANCE_SCALE,
-            cfg_t_start=cfg_t_start,
-            cfg_t_end=cfg_t_end,
-        )
+        self.base_stepper = base_stepper
 
     def _collapse_cfg_batch_layout_keep_override(
         self,
@@ -476,15 +473,25 @@ class GuidanceContinuationInversionStepper(_GuidanceCfgCore, BaseStepper):
     ) -> torch.Tensor:
         eps = self.j_eps
 
+        direction_norm = (
+            direction
+            .flatten(start_dim=1)
+            .norm(dim=1)
+            .view(-1, 1, 1)
+            .clamp_min(1e-8)
+        )
+
+        direction_unit = direction / direction_norm
+
         v_shifted = self._velocity_at_scale(
             model,
-            x + eps * direction,
+            x + eps * direction_unit,
             t,
             model_condition,
             scale,
         )
 
-        return (v_shifted - v_x) / eps
+        return (v_shifted - v_x) / eps * direction_norm
 
     def step(
         self,
@@ -507,12 +514,8 @@ class GuidanceContinuationInversionStepper(_GuidanceCfgCore, BaseStepper):
 
         self._collapse_cfg_batch_layout_keep_override(model_condition)
 
-        self.base_solver.guidance_scale = self._START_GUIDANCE_SCALE
-        self.base_solver.set_null_encoder_override(self._null_encoder_override)
-        self.base_solver.set_forbid_decoder_kv_cache(self._forbid_decoder_kv_cache)
-
         model_condition.past_key_values = None
-        payload = self.base_solver.step(
+        payload = self.base_stepper.step(
             model,
             x,
             t_curr=t_curr,

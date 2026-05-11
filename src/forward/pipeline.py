@@ -134,7 +134,7 @@ class ForwardPipeline:
 
         model_condition.past_key_values = None
 
-        t = make_time_grid(self._infer_steps, device, dtype, ratio=self._cfg.time_grid_ratio)
+        t = make_time_grid(self._infer_steps, device, dtype)
         traj: list[torch.Tensor] = [x.detach().clone()]
         start = int(inversion_artifact.forward_start_step_index)
         if start < 0 or start > self._infer_steps:

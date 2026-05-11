@@ -6,6 +6,7 @@ defaults:
 
 _target_: src.steppers.opt_stepper.OptStepper
 lr: 0.001
+lr_end: 0.0001
 num_steps: 10
 norm_boundary: 0.05
 epsilon: 1.0e-8

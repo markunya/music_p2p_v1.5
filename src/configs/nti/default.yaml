@@ -5,4 +5,7 @@ num_inner_steps: 10
 epsilon: 1.0e-7
 # If true (default), outer step j>0 starts Adam from the optimized null at j-1. If false, every j resets from ``model.null_condition_emb``.
 init_from_previous_outer: true
+# Run Adam only on outer steps j in [0, optimize_first_outer_steps). ``-1`` = all steps (same as before).
+# After that: no optimization; if ``init_from_previous_outer`` use the last null from step j-1, else ``model.null_condition_emb`` each step.
+optimize_first_outer_steps: -1
 gradient_checkpointing: false

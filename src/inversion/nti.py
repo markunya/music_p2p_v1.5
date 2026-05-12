@@ -59,6 +59,8 @@ class NullTextOptimization:
         self._init_from_previous_outer = bool(
             OmegaConf.select(nti, "init_from_previous_outer", default=True)
         )
+        _ofs = OmegaConf.select(nti, "optimize_first_outer_steps", default=-1)
+        self._optimize_first_outer_steps = int(_ofs) if _ofs is not None else -1
         self._grad_ckpt = bool(OmegaConf.select(nti, "gradient_checkpointing", default=False))
         self._writer = writer if writer is not None else DummyWriter()
 
@@ -106,6 +108,19 @@ class NullTextOptimization:
                 "NTI: init_from_previous_outer=False — each outer step starts from model.null_condition_emb"
             )
 
+        opt_limit = (
+            n_outer
+            if self._optimize_first_outer_steps < 0
+            else min(self._optimize_first_outer_steps, n_outer)
+        )
+        if opt_limit < n_outer:
+            logger.info(
+                "NTI: optimize_first_outer_steps={} — optimizing outer steps j < {}, then frozen null "
+                "(prev if init_from_previous_outer else model.null)",
+                self._optimize_first_outer_steps,
+                opt_limit,
+            )
+
         layers_orig = None
         if self._grad_ckpt:
             layers_orig = list(model.decoder.layers)
@@ -122,44 +137,59 @@ class NullTextOptimization:
                 t_curr, t_next = t[start + j], t[start + j + 1]
                 lr_j = _lr_outer(j, n_outer, self._lr)
 
-                use_prev = self._init_from_previous_outer and j > 0 and null_emb_prev is not None
-                in_cfg = _cfg_blend_interval(guidance_stepper, t_curr)
-                n_inner = self._num_inner if in_cfg else 1
+                do_optimize = j < opt_limit
 
-                if use_prev:
-                    null_emb = null_emb_prev.detach().clone().requires_grad_(True)
-                else:
-                    null_emb = (
-                        model.null_condition_emb.expand_as(cond_ref).clone().detach().requires_grad_(True)
+                if do_optimize:
+                    use_prev = (
+                        self._init_from_previous_outer and j > 0 and null_emb_prev is not None
                     )
+                    in_cfg = _cfg_blend_interval(guidance_stepper, t_curr)
+                    n_inner = self._num_inner if in_cfg else 1
 
-                guidance_stepper.reset_guidance_layout()
-                optimizer = AdamW([null_emb], lr=lr_j, weight_decay=0.1)
+                    if use_prev:
+                        null_emb = null_emb_prev.detach().clone().requires_grad_(True)
+                    else:
+                        null_emb = (
+                            model.null_condition_emb.expand_as(cond_ref)
+                            .clone()
+                            .detach()
+                            .requires_grad_(True)
+                        )
 
-                for k in range(n_inner):
                     guidance_stepper.reset_guidance_layout()
-                    cond_nti = cond_base.clone()
-                    cond_nti.past_key_values = None
-                    guidance_stepper.set_null_encoder_override(null_emb)
+                    optimizer = AdamW([null_emb], lr=lr_j, weight_decay=0.1)
 
-                    payload = guidance_stepper.step(
-                        model=model,
-                        x=latent_cur,
-                        t_curr=t_curr,
-                        t_next=t_next,
-                        model_condition=cond_nti,
-                    )
-                    loss = F.mse_loss(payload.x, target)
-                    optimizer.zero_grad(set_to_none=True)
-                    loss.backward()
-                    optimizer.step()
+                    for k in range(n_inner):
+                        guidance_stepper.reset_guidance_layout()
+                        cond_nti = cond_base.clone()
+                        cond_nti.past_key_values = None
+                        guidance_stepper.set_null_encoder_override(null_emb)
 
-                    global_step = j * self._num_inner + k
-                    self._writer.add_scalar("nti/loss", float(loss.item()), step=global_step)
-                    self._writer.add_scalar("nti/lr_outer", lr_j, step=global_step)
+                        payload = guidance_stepper.step(
+                            model=model,
+                            x=latent_cur,
+                            t_curr=t_curr,
+                            t_next=t_next,
+                            model_condition=cond_nti,
+                        )
+                        loss = F.mse_loss(payload.x, target)
+                        optimizer.zero_grad(set_to_none=True)
+                        loss.backward()
+                        optimizer.step()
 
-                    if in_cfg and float(loss.item()) < self._epsilon:
-                        break
+                        global_step = j * self._num_inner + k
+                        self._writer.add_scalar("nti/loss", float(loss.item()), step=global_step)
+                        self._writer.add_scalar("nti/lr_outer", lr_j, step=global_step)
+
+                        if in_cfg and float(loss.item()) < self._epsilon:
+                            break
+                else:
+                    if self._init_from_previous_outer and null_emb_prev is not None:
+                        null_emb = null_emb_prev.detach().clone()
+                    else:
+                        null_emb = (
+                            model.null_condition_emb.expand_as(cond_ref).clone().detach()
+                        )
 
                 self._writer.add_scalar(
                     "nti/null_emb_norm",

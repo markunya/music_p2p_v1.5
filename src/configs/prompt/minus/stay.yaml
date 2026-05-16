@@ -1,2 +1,9 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "electronic, dance, edm, future house, melodic, energetic, female vocal, uplifting, club, emotional, modern, synth bass, drop, rhythmic, catchy hook, remix"
 lyrics: ""
+vocal_language: en

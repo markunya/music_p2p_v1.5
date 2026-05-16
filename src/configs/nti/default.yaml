@@ -1,11 +1,18 @@
-# Null-text optimization (runs after inversion when ``enabled``; ``cfg.stepper`` must be a CFG guidance stepper — see ``CFG_GUIDANCE_STEPPERS`` in ``src/steppers/guidance.py``).
+# Null-text optimization (NTI) after inversion. Requires cfg.stepper to be a CFG guidance stepper with
+# guidance_scale > 1. Runs in InversionPipeline when enabled; stores per-step null embeddings in
+# InversionArtifact v2. Read by NullTextOptimization from cfg.nti (not Hydra-instantiated).
+#
+# enabled: run NTI after building the inversion trajectory.
+# lr: Adam LR on null embeddings at first outer step (linear decay toward lr/2 on last outer step).
+# num_inner_steps: Adam steps per outer step while CFG interval is active (else 1).
+# epsilon: early-stop inner loop when loss < epsilon (CFG steps only).
+# init_from_previous_outer: if true, outer j>0 starts from previous null; else model.null_condition_emb.
+# optimize_first_outer_steps: optimize only for outer j < N (-1 = all outer steps).
+# gradient_checkpointing: checkpoint decoder layers during NTI (slower, less VRAM).
 enabled: false
 lr: 1.0e-2
 num_inner_steps: 10
 epsilon: 1.0e-7
-# If true (default), outer step j>0 starts Adam from the optimized null at j-1. If false, every j resets from ``model.null_condition_emb``.
 init_from_previous_outer: true
-# Run Adam only on outer steps j in [0, optimize_first_outer_steps). ``-1`` = all steps (same as before).
-# After that: no optimization; if ``init_from_previous_outer`` use the last null from step j-1, else ``model.null_condition_emb`` each step.
 optimize_first_outer_steps: -1
 gradient_checkpointing: false

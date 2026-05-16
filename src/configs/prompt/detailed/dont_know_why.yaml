@@ -1,3 +1,9 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "smooth jazz pop ballad, soft lounge jazz, intimate female lead vocal, warm breathy timbre, calm melancholic mood, gentle regretful atmosphere, slow relaxed tempo, understated groove, acoustic piano-led arrangement, soft brushed drums, mellow electric guitar accents, warm upright bass, sparse instrumentation, late-night smoky room feel, close-mic vocal production, subtle swing feel, elegant minimal harmonies, tender reflective phrasing, bittersweet romantic tone"
 lyrics: |
   I waited 'til I saw the sun
@@ -5,3 +11,4 @@ lyrics: |
   I left you by the house of fun
   Don't know why I didn't come
   Don't know why I didn't come
+vocal_language: en

@@ -1,3 +1,11 @@
+# GuidanceContinuationInversionStepper on top of OptStepper (nested via defaults). Same GCI fields as gci.yaml.
+#
+# guidance_scale: target CFG scale at end of continuation ramp.
+# cfg_t_start: lower time bound for CFG (inclusive).
+# cfg_t_end: upper time bound for CFG (inclusive).
+# continuation_steps: inner fixed-point iterations per step.
+# j_approx: use Jacobian approximation in GCI update.
+# j_eps: finite-difference epsilon when j_approx is true.
 defaults:
   - opt_stepper@base_stepper
   - _self_
@@ -6,5 +14,6 @@ _target_: src.steppers.guidance.GuidanceContinuationInversionStepper
 guidance_scale: 2.0
 cfg_t_start: 0.0
 cfg_t_end: 1.0
-# Inner fixed-point iterations per ODE step (ramps CFG from 1.0 to guidance_scale).
 continuation_steps: 10
+j_approx: false
+j_eps: 1.0e-3

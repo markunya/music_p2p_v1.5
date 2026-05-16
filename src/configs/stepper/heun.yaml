@@ -1,1 +1,2 @@
+# Heun — predictor-corrector ODE step without guidance. Stateless (no constructor parameters).
 _target_: src.steppers.heun.Heun

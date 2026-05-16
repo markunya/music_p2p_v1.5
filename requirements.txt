@@ -1,8 +1,11 @@
-# Editable install: ACE-Step 1.5 (sibling repo under diploma/)
--e ../ACE-Step-1.5
+# Install ACE-Step 1.5 in the same Python environment first (see README).
+# ACE-Step provides torch, transformers, acestep, and most runtime dependencies.
 
 hydra-core>=1.3.0
 omegaconf>=2.3.0
-
 comet_ml>=3.0.0
 matplotlib>=3.7.0
+loguru>=0.7.0
+tqdm>=4.65.0
+torchaudio>=2.0.0
+transformers>=4.51.0,<4.58.0

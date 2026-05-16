@@ -1,7 +1,9 @@
-# lyric_rep / dont_know_why — замены (слышно как «не те слова»)
-# I waited 'til I saw the sun      →  I hate it 'til I saw the sun
-# I don't know why I didn't come   →  I don't know why I didn't comb
-# I left you by the house of fun  →  I left you at the house of rum
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "jazz pop, soft jazz, female vocal, calm, melancholic, piano, guitar, drums, intimate"
 lyrics: |
   I hate it 'til I saw the sun
@@ -9,3 +11,4 @@ lyrics: |
   I left you at the house of rum
   Don't know, why I didn't comb
   Don't know, why I didn't comb
+vocal_language: en

@@ -1,1 +1,4 @@
+# ReplacementAttentionController — token-level lyrics/caption replacement via alignment mappers.
+# Stateless constructor; all setup happens in build(handler, cfg) from cfg.p2p_task and duration.
+# Expects forward batch size 2 (src, tgt). Operates on cross-attention weight slices per field.
 _target_: src.attention_injection.controllers.replacement.ReplacementAttentionController

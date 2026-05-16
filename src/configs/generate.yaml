@@ -1,4 +1,17 @@
-# _self_ last so keys below override acestep/prompt/stepper groups and stay authoritative.
+# Entry config for generate.py — text-to-audio from noise or from inversion artifact.path.
+# Inherits acestep, prompt, stepper, controller, writer groups via defaults.
+#
+# comet_run_prefix: prefix for Comet run_name (must yield gen_/edit_/inv_ when resolved).
+# exp_name: experiment folder name under save_dir.
+# save_dir: root directory for experiment outputs.
+# seed: RNG seed when use_random_seed is false.
+# use_random_seed: draw a random seed instead of seed.
+# debug_mode: log full resolved config at startup.
+# duration: clip length in seconds (-1 = model default).
+# inference_steps: number of diffusion time steps.
+# batch_size: number of prompts / samples in one forward.
+# audio_format: output file extension for saved wav.
+# artifact.path: optional InversionArtifact .pt; null uses prepare_noise.
 defaults:
   - acestep: default
   - prompt: example

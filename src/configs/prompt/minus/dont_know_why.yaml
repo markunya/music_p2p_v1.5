@@ -1,3 +1,9 @@
-# Те же captions, лирика пустая (инструментал / хмм)
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "jazz pop, soft jazz, calm, melancholic, piano, guitar, drums, intimate"
 lyrics: ""
+vocal_language: en

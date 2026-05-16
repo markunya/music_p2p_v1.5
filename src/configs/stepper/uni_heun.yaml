@@ -1,1 +1,2 @@
+# UniHeun — uni variant of Heun. Stateless (no constructor parameters).
 _target_: src.steppers.uni_heun.UniHeun

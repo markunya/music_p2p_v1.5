@@ -1,2 +1,10 @@
+# GuidanceStepperEuler — Euler ODE step with classifier-free guidance (CFG) on the decoder.
+# Doubles the batch for cond/null when guidance_scale > 1 and t is inside [cfg_t_start, cfg_t_end].
+#
+# guidance_scale: CFG scale (>1 enables null branch).
+# cfg_t_start: lower time bound for CFG (inclusive).
+# cfg_t_end: upper time bound for CFG (inclusive).
 _target_: src.steppers.guidance.GuidanceStepperEuler
-guidance_scale: 2.0
+guidance_scale: 3.0
+cfg_t_start: 0.0
+cfg_t_end: 1.0

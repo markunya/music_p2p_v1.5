@@ -1,5 +1,15 @@
-# Generation params (seed, inference_steps, duration, …) come from `generate` via defaults — do not duplicate here.
-# Inversion ODE: same presets as `stepper/` but mounted at `invert_stepper` (no duplicate config dir).
+# Entry config for invert_music.py — encode audio to noise / inversion artifact.
+# Inherits generate.yaml fields; invert_stepper selects the inversion ODE (stepper@invert_stepper).
+#
+# comet_run_prefix: Comet run prefix (inv_*).
+# exp_name, save_dir: experiment output directory.
+# music_path: input wav/mp3 path (required).
+# artifact_out: output .pt path for InversionArtifact; null to skip saving.
+# alpha: fraction of inversion steps in [0,1] (1 = full trajectory).
+# log_trajectory_images: log false-color latent grids to writer (slow).
+# log_trajectory_max_edge: max edge length for trajectory images.
+# log_local_error: per-step MSE between invert and forward stepper on one grid edge.
+# time_grid_ratio: time grid compression (1.0 = full linspace 1→0).
 defaults:
   - generate
   - stepper@invert_stepper: uni_euler
@@ -15,16 +25,10 @@ music_path: ???
 
 artifact_out: inverted_artifact.pt
 
-# alpha in [0, 1]: fraction of inversion steps to run (1.0 = full inversion).
-# Partial inversion stores latent at t ~ alpha; ForwardPipeline starts at step N-K.
 alpha: 1.0
 
-# Comet: false-color latent grids along inversion only (expensive).
 log_trajectory_images: false
 log_trajectory_max_edge: 4096
 
-# After each inversion step: one forward ``stepper`` step (same time edge as ForwardPipeline) and
-# MSE(x_hat, x_before) / dt (forward time step); compares ``invert_stepper`` vs ``stepper`` on one grid.
-# Logged via loguru and ``writer.add_scalar`` ``inv/local_error_mse_per_dt`` (Comet when writer is CometMLWriter).
 log_local_error: false
 time_grid_ratio: 1.0

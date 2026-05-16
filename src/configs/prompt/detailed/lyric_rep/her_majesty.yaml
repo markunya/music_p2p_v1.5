@@ -1,3 +1,9 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "short whimsical classic rock vignette, acoustic guitar-led arrangement, lo-fi home-recorded feel, playful male vocal, dry intimate vocal mix, light British folk-rock influence, sparse instrumentation, single acoustic guitar accompaniment, casual singalong phrasing, cheeky romantic tone, humorous miniature song structure, raw demo-like production, warm vintage tape texture, minimal percussion-free arrangement, upbeat yet relaxed mood, conversational delivery, simple catchy melody, charming unfinished ending feel"
 lyrics: |
   [Verse]
@@ -6,3 +12,4 @@ lyrics: |
   I wanna tell her that I lava lamp, but I gotta get a belly full of wine
   Her Majesty's a pity knife squirrel, someday, I'm gonna make her minecart, oh, yeah
   Someday, I'm gonna make her minecart
+vocal_language: en

@@ -1,8 +1,14 @@
-# PPAE-style full cross-attention map fuser (post-softmax, eager hook).
-# t_s, t_e use the same scale as ForwardPipeline controller context ctx["t"] (diffusion time ~1..0).
-# Active when t_e <= t <= t_s (requires t_s > t_e). Outside: target row uses source attention map.
+# PPAEReplacementController — post-softmax fusion of full cross-attention maps for p2p edit.
+# Used with batch 2 (src/tgt) or batch 4 under CFG (cond/null pairs). ctx["t"] is diffusion time
+# from ForwardPipeline (same scale as make_time_grid, typically 1→0). Active window: t_e <= t <= t_s.
+# Outside the window the target row uses the source map; inside, rows blend with cosine alpha(t).
+#
+# t_s: window start time (high t, early in descending loop).
+# t_e: window end time (low t).
+# eta_min: minimum target-map weight at p=0.
+# eta_max: maximum target-map weight at p=1.
 _target_: src.attention_injection.controllers.ppae_replacement.PPAEReplacementController
-t_s: 1.0
-t_e: 0.5
+t_s: 0.8
+t_e: 0.2
 eta_min: 0.0
 eta_max: 1.0

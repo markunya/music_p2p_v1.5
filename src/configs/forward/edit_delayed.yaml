@@ -1,6 +1,0 @@
-# P2P edit: delayed injection.
-_target_: src.forward.edit_forward.UnifiedEditForwardRunner
-
-alpha: 0.6
-stepper:
-  _target_: src.forward.steppers.delayed_injection_edit_stepper.DelayedInjectionEditStepper

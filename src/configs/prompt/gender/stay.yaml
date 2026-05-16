@@ -1,4 +1,9 @@
-# Только смена пола вокала (было: female)
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "electronic, dance, edm, future house, melodic, energetic, male vocal, uplifting, club, emotional, modern, synth bass, drop, rhythmic, catchy hook, remix"
 lyrics: |
   But you're going, and you know that
@@ -8,3 +13,4 @@ lyrics: |
   All you have to do is wait a second
   Your hands on mine
   The clock is ticking, so stay
+vocal_language: en

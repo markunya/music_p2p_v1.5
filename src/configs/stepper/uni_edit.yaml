@@ -1,1 +1,11 @@
+# UniEditStepper — p2p edit step from src/tgt velocity difference (batch size 2 required).
+#
+# omega: edit shift strength along masked velocity difference.
+# eps: stabilizer for min-max mask normalization.
+# do_abs: use absolute value of velocity difference before masking.
+# mask_mode: "image" or "audio" mask layout over latent time.
 _target_: src.steppers.uni_edit.UniEditStepper
+omega: 0.0
+eps: 1.0e-8
+do_abs: false
+mask_mode: image

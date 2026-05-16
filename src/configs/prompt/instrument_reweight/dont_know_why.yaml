@@ -1,4 +1,9 @@
-# reweight: append ※ (U+203B) to a caption tag. Orig: dont_know_why
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "jazz pop, soft jazz, female vocal, calm, melancholic, piano※, guitar, drums, intimate"
 lyrics: |
   I waited 'til I saw the sun
@@ -6,3 +11,4 @@ lyrics: |
   I left you by the house of fun
   Don't know why I didn't come
   Don't know why I didn't come
+vocal_language: en

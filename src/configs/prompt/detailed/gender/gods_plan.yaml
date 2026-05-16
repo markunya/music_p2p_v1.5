@@ -1,3 +1,9 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "minimal melodic trap anthem, modern hip hop production, deep 808 sub bass, sparse atmospheric synth pads, crisp trap drums, sharp rolling hi-hats, tight snare and punchy kick, female rap vocal, calm confident delivery, reflective introspective mood, restrained emotional tone, catchy repetitive intro hook, mid-tempo groove, clean polished mix, spacious beat arrangement, subtle melodic ambience, understated verses, motivational yet vulnerable energy, late-night urban feel, smooth vocal cadence, mainstream rap sound"
 lyrics: |
   [Intro]
@@ -15,3 +21,4 @@ lyrics: |
   Hope I got some brothers that outlive me 
   They gon' tell the story, shit was different with me 
   God's plan, God's plan
+vocal_language: en

@@ -1,3 +1,10 @@
+# Entry config for edit_music.py — invert with src prompt, forward with src+tgt and optional attention control.
+# Inherits invert_music; p2p_task holds prompt@p2p_task.src and prompt@p2p_task.tgt groups.
+#
+# comet_run_prefix: Comet run prefix (edit_*).
+# exp_name, save_dir: experiment output directory.
+# edit_regions: optional list of [start_sec, end_sec] edit windows; null = full clip.
+# log_edit_latent_recon_mse: log MSE(clean latents, forward src branch final latent).
 defaults:
   - invert_music
   - prompt@p2p_task.src: her_majesty
@@ -9,10 +16,6 @@ comet_run_prefix: edit
 exp_name: p2p_edit_run
 save_dir: _exps/p2p_edit
 
-# Optional local edit windows in seconds: [[start, end], ...].
-# If null/empty, ForwardPipeline uses full-range edit [[0, duration]].
 edit_regions: null
 
-# MSE between clean latents (pre-inversion encode) and forward ``final_latents[0]`` (src branch).
-# Logged to loguru and ``writer.add_scalar`` (Comet when writer is CometMLWriter).
 log_edit_latent_recon_mse: true

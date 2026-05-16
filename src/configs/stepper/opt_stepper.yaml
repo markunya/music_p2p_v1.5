@@ -1,4 +1,13 @@
-# Wraps two steppers: init forward step, then small delta optimization vs opt stepper with swapped time.
+# OptStepper — one init forward step, then Adam on a latent delta using opt_stepper with swapped time.
+# Nested init_stepper and opt_stepper come from defaults (uni_euler + euler by default).
+#
+# lr: Adam learning rate at first inner step.
+# lr_end: Adam learning rate at last inner step (linear schedule; equals lr if omitted in code).
+# num_steps: inner optimization steps per ODE edge.
+# norm_boundary: clamp max L2 norm of delta.
+# epsilon: stop inner loop when loss falls below this (when applicable).
+# reg_noise_std: Gaussian noise added to x_opt each inner step (0 = off).
+# use_best_delta: if true, return delta with lowest loss; else last iterate.
 defaults:
   - uni_euler@init_stepper
   - euler@opt_stepper
@@ -6,12 +15,9 @@ defaults:
 
 _target_: src.steppers.opt_stepper.OptStepper
 lr: 0.001
-lr_end: 0.0001
-# Optional ``lr_end``: linear schedule ``lr`` -> ``lr_end`` over inner steps (omit = constant ``lr``).
+lr_end: 0.001
 num_steps: 10
 norm_boundary: 0.05
 epsilon: 1.0e-6
-# Gaussian regularization on x_opt each inner step: x_opt += std * randn; 0 = off.
 reg_noise_std: 0.0
-# If true, return ``x_init + delta`` with lowest observed loss; else last iterate after Adam.
 use_best_delta: true

@@ -1,7 +1,0 @@
-# P2P edit (UniEdit по времени): тот же ``UnifiedEditForwardRunner``, задаётся только узлом ``forward``.
-_target_: src.forward.edit_forward.UnifiedEditForwardRunner
-
-alpha: 0.6
-stepper:
-  _target_: src.forward.steppers.uniedit_time_edit_stepper.UniEditTimeEditStepper
-  omega: 5.0

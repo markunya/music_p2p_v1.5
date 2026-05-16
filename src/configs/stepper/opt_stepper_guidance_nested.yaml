@@ -1,4 +1,13 @@
-# Wraps two steppers: init forward step, then small delta optimization vs opt stepper with swapped time.
+# OptStepper with gci_opt init (GCI wrapped around OptStepper) and guidance_euler opt.
+# num_steps default here is higher than opt_stepper.yaml for nested GCI+opt init.
+#
+# lr: Adam learning rate at first inner step.
+# lr_end: Adam learning rate at last inner step.
+# num_steps: inner optimization steps per ODE edge.
+# norm_boundary: clamp max L2 norm of delta.
+# epsilon: early-stop loss threshold.
+# reg_noise_std: Gaussian regularization on x_opt (0 = off).
+# use_best_delta: keep best-loss delta vs last iterate.
 defaults:
   - gci_opt@init_stepper
   - guidance_euler@opt_stepper
@@ -6,7 +15,9 @@ defaults:
 
 _target_: src.steppers.opt_stepper.OptStepper
 lr: 0.001
-lr_end: 0.0001
+lr_end: 0.001
 num_steps: 20
 norm_boundary: 0.05
-epsilon: 1.0e-8
+epsilon: 1.0e-6
+reg_noise_std: 0.0
+use_best_delta: true

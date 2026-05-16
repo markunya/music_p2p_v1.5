@@ -1,4 +1,7 @@
-# Cross-attn reweighting (eager, after softmax).
-# Runtime equalizer is built inside ReweightAttentionController.build from cfg.p2p_task.
+# ReweightAttentionController — scales cross-attention keys after softmax using a p2p equalizer
+# built from cfg.p2p_task (src/tgt prompts). No runtime parameters beyond build(); strength scales
+# the precomputed map at forward time.
+#
+# reweight_strength: multiplier on the equalizer (1.0 = as built from markup).
 _target_: src.attention_injection.controllers.reweight.ReweightAttentionController
 reweight_strength: 1.0

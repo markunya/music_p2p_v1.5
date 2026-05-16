@@ -1,10 +1,9 @@
-# lyric_rep / jerk_it_out — замены
-# along the avenue  →  a long, the avenue (фраза ломается, слышно)
-# but I'm alright   →  but I'm a llama right  (абсурд, «не те слова»)
-# how it's done     →  how it's Dun (имя / каламбур)
-# through your bones →  true, your phones
-# And you jerk it out →  end you, church it out
-# kickin' this can  →  chicken, this can
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "indie rock, up-tempo, riff-driven, swagger, electric guitar, bass, drums, male vocal, organ"
 lyrics: |
   [Verse 1]
@@ -17,3 +16,4 @@ lyrics: |
 
   [Chorus]
   End you, church it out
+vocal_language: en

@@ -1,9 +1,9 @@
-# lyric_rep / her_majesty — замены
-# pretty nice girl  →  petty night girl
-# have a lot to say →  have a lot to weigh
-# from day to day  →  from they to dey  (созвучно, нелепо)
-# belly full of wine →  jelly full of whine
-# make her mine (×2)  →  make her mind
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "classic rock, acoustic guitar, lo-fi, playful, male vocal, short"
 lyrics: |
   [Verse]
@@ -12,3 +12,4 @@ lyrics: |
   I wanna tell her that I love her a lot, but I gotta get a jelly full of whine
   Her Majesty's a petty night girl, Sunday, I'm gonna make her mind, oh, yeah
   Sunday, I'm gonna make her mind
+vocal_language: en

@@ -1,4 +1,9 @@
-# Было indie rock; стиль: 70s disco; male vocal
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "disco, string section, clavinet, hand claps, club groove, walking bass, horn stabs, male vocal, glitter-ball era, 1970s dance"
 lyrics: |
   [Verse 1]
@@ -11,3 +16,4 @@ lyrics: |
 
   [Chorus]
   And you jerk it out
+vocal_language: en

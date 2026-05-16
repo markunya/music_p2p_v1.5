@@ -1,3 +1,9 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code (default en).
+
 captions: "garage rock revival, alternative rock, indie rock, 134 bpm, g sharp minor, male vocal, shouted hook, farfisa-style organ riff, fuzzy electric guitar, driving bassline, punchy live drums, handclap energy, up-tempo groove, raw 2000s production, swaggering vocal delivery, catchy chant chorus, rebellious mood, sports-game anthem feel"
 lyrics: |
   [Verse 1]
@@ -10,3 +16,4 @@ lyrics: |
 
   [Chorus]
   And you jerk the trout
+vocal_language: en

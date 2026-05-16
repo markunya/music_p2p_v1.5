@@ -1,2 +1,9 @@
+# GuidanceStepperHeun — Heun (predictor-corrector) step with CFG, same schedule fields as Euler guidance.
+#
+# guidance_scale: CFG scale (>1 enables null branch).
+# cfg_t_start: lower time bound for CFG (inclusive).
+# cfg_t_end: upper time bound for CFG (inclusive).
 _target_: src.steppers.guidance.GuidanceStepperHeun
-guidance_scale: 3.0
+guidance_scale: 7.0
+cfg_t_start: 0.0
+cfg_t_end: 1.0

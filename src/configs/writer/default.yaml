@@ -1,3 +1,10 @@
+# Comet ML logging via setup_writer → CometMLWriter. Set writer=null to disable (DummyWriter).
+# run_name is resolved as ${comet_run_prefix}_${exp_name} in entry configs (gen/edit/inv).
+#
+# project_name: Comet project (required for CometMLWriter).
+# workspace: Comet workspace (null = default workspace).
+# run_name: experiment name in Comet (must resolve to gen_* / edit_* / inv_* prefix).
+# mode: Online | Offline experiment type.
 project_name: music-p2p
 workspace: null
 run_name: ${comet_run_prefix}_${exp_name}

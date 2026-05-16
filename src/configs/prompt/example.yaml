@@ -1,3 +1,8 @@
+# Prompt preset (PromptConfig / src/schemas.py) — text conditioning for a single generation or p2p branch.
+#
+# captions: style, instruments, mood (required).
+# lyrics: lyric text with section tags such as [Verse] (required).
+# vocal_language: ISO-style vocal language code.
 captions: "classic rock, acoustic, lo-fi, playful, male vocal, short"
 lyrics: |
   [Verse]
@@ -6,3 +11,4 @@ lyrics: |
   I wanna tell her that I love her a lot, but I gotta get a belly full of wine
   Her Majesty's a pretty nice girl, someday, I'm gonna make her mine, oh, yeah
   Someday, I'm gonna make her mine
+vocal_language: en

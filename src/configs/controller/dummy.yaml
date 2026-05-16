@@ -1,1 +1,3 @@
+# DummyAttentionController — identity on attention weights (no injection). Default for generate
+# and any run without attention editing.
 _target_: src.attention_injection.controllers.base.DummyAttentionController

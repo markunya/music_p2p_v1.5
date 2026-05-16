@@ -48,7 +48,7 @@ class ForwardPipeline:
         self._controller: AttentionControllerBase = (
             attention_controller
             if attention_controller is not None
-            else instantiate(cfg.controller)  # type: ignore[assignment]
+            else instantiate(cfg.controller)
         )
         self._decoder_wrap_done: bool = False
         self._decoder_orig: torch.nn.Module | None = None

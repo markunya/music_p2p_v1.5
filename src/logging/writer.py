@@ -86,8 +86,6 @@ class CometMLWriter(BaseWriter):
         if w is None:
             raise ValueError("CometMLWriter: cfg.writer is missing")
         w_d = OmegaConf.to_container(w, resolve=True)
-        if not isinstance(w_d, dict):
-            raise TypeError("cfg.writer must resolve to a dict")
         mode_raw = w_d.get("mode", "Online")
         if isinstance(mode_raw, str):
             mode = ExperimentMode[mode_raw]
@@ -117,8 +115,7 @@ class CometMLWriter(BaseWriter):
 
         try:
             params = OmegaConf.to_container(project_config, resolve=True)
-            if isinstance(params, dict):
-                self.exp.log_parameters(parameters=_flatten_config_for_comet(params))
+            self.exp.log_parameters(parameters=_flatten_config_for_comet(params))
         except Exception as exc:
             logger.info(f"Comet log_parameters пропущен: {exc}")
 
@@ -209,7 +206,7 @@ _COMET_RUN_NAME_RE = re.compile(r"^(gen|edit|inv)_")
 
 
 def setup_writer(cfg: DictConfig) -> BaseWriter:
-    if isinstance(cfg, DictConfig) and OmegaConf.is_missing(cfg, "writer"):
+    if OmegaConf.is_missing(cfg, "writer"):
         return _dummy_writer("в конфиге нет ключа writer")
     w = OmegaConf.select(cfg, "writer")
     if w is None:
@@ -217,8 +214,6 @@ def setup_writer(cfg: DictConfig) -> BaseWriter:
     d = OmegaConf.to_container(w, resolve=True)
     if d is None or d == {}:
         return _dummy_writer("writer после resolve пустой")
-    if not isinstance(d, dict):
-        return _dummy_writer(f"writer не dict, а {type(d).__name__}")
     if not d.get("project_name"):
         return _dummy_writer("writer.project_name пуст — задайте имя проекта Comet")
     rn_raw = d.get("run_name")
@@ -234,7 +229,7 @@ def setup_writer(cfg: DictConfig) -> BaseWriter:
             "set comet_run_prefix in the Hydra config (gen / edit / inv) or override writer.run_name."
         )
     try:
-        import comet_ml as _comet_check  # noqa: F401
+        import comet_ml as _comet_check
     except ImportError as exc:
         logger.info(
             f"comet_ml не импортируется для этого интерпретатора:\n  {sys.executable}\n"

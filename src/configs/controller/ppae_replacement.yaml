@@ -1,0 +1,8 @@
+# PPAE-style full cross-attention map fuser (post-softmax, eager hook).
+# t_s, t_e use the same scale as ForwardPipeline controller context ctx["t"] (diffusion time ~1..0).
+# Active when t_e <= t <= t_s (requires t_s > t_e). Outside: target row uses source attention map.
+_target_: src.attention_injection.controllers.ppae_replacement.PPAEReplacementController
+t_s: 1.0
+t_e: 0.5
+eta_min: 0.0
+eta_max: 1.0

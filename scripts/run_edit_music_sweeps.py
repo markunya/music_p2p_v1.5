@@ -1,15 +1,4 @@
 #!/usr/bin/env python3
-"""
-Sequential sweeps for ``edit_music.py`` (run from repo root ``music_p2p_v1.5``).
-
-Group 1: guidance forward + invert variants × tracks × guidance_scale.
-Group 2: euler forward + invert variants × tracks.
-
-A failed run does not stop the sweep; exit code 1 means at least one run failed (see stderr summary).
-
-Track id for Hydra prompts: ``*.mp3`` stem with ``-`` replaced by ``_``
-(e.g. ``gods-plan.mp3`` → ``detailed/gods_plan``).
-"""
 
 from __future__ import annotations
 
@@ -21,7 +10,6 @@ from pathlib import Path
 
 
 def continuation_steps_for_gci(gs: float) -> int:
-    """Match (GS - 1) / 0.1 as integer step count (1.5→5, 2.0→10, 3.0→20)."""
     return max(1, int(round((gs - 1.0) / 0.1)))
 
 
@@ -41,7 +29,6 @@ def _hydra_music_dir_rel(repo_root: Path, music_dir: Path) -> str:
 def resolve_real_music_dir(
     repo_root: Path, override: Path | None
 ) -> tuple[Path, str] | None:
-    """(absolute dir with *.mp3, Hydra music_path directory relative to repo_root)."""
     rr = repo_root.resolve()
     if override is not None:
         d = override.expanduser().resolve()

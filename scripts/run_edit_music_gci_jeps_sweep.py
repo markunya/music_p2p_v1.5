@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Per-track sweep: GCI inversion with guidance_scale=1.5, j_approx=true, varying j_eps.
-
-Same Hydra layout as GUIDANCE_INVERSION in ``run_edit_music_sweeps.py`` (guidance_euler
-forward, gci invert, detailed prompts). Run from repo root ``music_p2p_v1.5`` or pass
-``--repo-root``.
-
-j_eps grid: 1e-1, 1e-2, 1e-3, 1e-4 (Hydra CLI overrides, no ``=`` inside exp_name).
-"""
 
 from __future__ import annotations
 
@@ -41,7 +32,6 @@ def _hydra_music_dir_rel(repo_root: Path, music_dir: Path) -> str:
 def resolve_real_music_dir(
     repo_root: Path, override: Path | None
 ) -> tuple[Path, str] | None:
-    """(absolute dir with *.mp3, Hydra music_path directory relative to repo_root)."""
     rr = repo_root.resolve()
     if override is not None:
         d = override.expanduser().resolve()

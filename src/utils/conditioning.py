@@ -199,8 +199,6 @@ def prepare_conditions(
 
 def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[PromptConfig]:
     d = OmegaConf.to_container(prompt_cfg, resolve=True)
-    if not isinstance(d, dict):
-        raise TypeError("prompt config must resolve to a dict")
     base = PromptConfig(
         captions=str(d.get("captions", "")),
         lyrics=str(d.get("lyrics", "")),
@@ -211,8 +209,6 @@ def prompts_from_hydra_prompt_node(prompt_cfg: Any, batch_size: int) -> List[Pro
 
 def prompt_config_from_hydra_node(prompt_node: Any) -> PromptConfig:
     d = OmegaConf.to_container(prompt_node, resolve=True)
-    if not isinstance(d, dict):
-        raise TypeError("prompt node must resolve to a dict")
     return PromptConfig(
         captions=str(d.get("captions", "")),
         lyrics=str(d.get("lyrics", "")),

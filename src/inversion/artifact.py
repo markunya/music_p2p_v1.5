@@ -45,19 +45,11 @@ class InversionArtifact:
         if ver not in (1, 2):
             raise ValueError(f"Unsupported artifact version {ver}, expected 1 or 2")
         noise = data["noise"]
-        if not torch.is_tensor(noise):
-            raise TypeError("artifact missing tensor 'noise'")
         null_list: list[torch.Tensor] | None = None
         if ver == 2:
             raw = data.get("null_embeddings_per_step")
             if raw is not None:
-                if not isinstance(raw, (list, tuple)):
-                    raise TypeError("null_embeddings_per_step must be a list of tensors")
-                null_list = []
-                for i, t in enumerate(raw):
-                    if not torch.is_tensor(t):
-                        raise TypeError(f"null_embeddings_per_step[{i}] is not a tensor")
-                    null_list.append(t)
+                null_list = list(raw)
         return InversionArtifact(
             noise=noise,
             forward_start_step_index=int(data.get("forward_start_step_index", 0)),
@@ -72,6 +64,4 @@ class InversionArtifact:
             data = torch.load(str(path), map_location="cpu", weights_only=False)
         except TypeError:
             data = torch.load(str(path), map_location="cpu")
-        if not isinstance(data, dict):
-            raise TypeError(f"Expected dict in artifact file, got {type(data)}")
         return cls.from_state_dict(data)

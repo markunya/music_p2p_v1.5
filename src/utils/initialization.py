@@ -15,7 +15,7 @@ def init_dit_handler(cfg: "DictConfig"):
     project_root = resolve_against_original_cwd(str(cfg.acestep.project_root))
     use_flash_attention = False
     try:
-        import flash_attn  # noqa: F401
+        import flash_attn
 
         use_flash_attention = True
     except ImportError:

@@ -7,7 +7,6 @@ import torch
 from src.schemas import PromptConfig
 from src.utils.conditioning import ModelCondition
 
-# ※  U+203B — paste this after a caption tag or lyric word to mark reweight targets
 REWEIGHT_MARK = "\u203b"
 _RE_LYRIC_WORD = re.compile(
     r"([^\s" + re.escape(REWEIGHT_MARK) + r"]+)(" + re.escape(REWEIGHT_MARK) + r")"

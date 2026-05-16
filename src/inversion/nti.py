@@ -37,7 +37,6 @@ def _lr_outer(j: int, n_infer: int, lr: float) -> float:
 
 
 def _cfg_blend_interval(guidance_stepper: Any, t_curr: torch.Tensor) -> bool:
-    """Same condition as guidance ``_in_cfg_interval`` (cfg_forward applied at ``t_curr``)."""
     t = float(t_curr)
     ts = float(guidance_stepper.cfg_t_start)
     te = float(guidance_stepper.cfg_t_end)
@@ -228,10 +227,7 @@ class NullTextOptimization:
 
 def validate_nti_prerequisites(model: Any, stepper: Any) -> None:
     if not isinstance(stepper, CFG_GUIDANCE_STEPPERS):
-        raise TypeError(
-            "NTI requires cfg.stepper to be one of CFG_GUIDANCE_STEPPERS "
-            "(GuidanceStepperEuler/Heun, UniEuler/UniHeun guidance, GuidanceContinuationInversionStepper)"
-        )
+        raise ValueError("NTI requires a CFG guidance stepper")
     if float(stepper.guidance_scale) <= 1.0:
         raise ValueError("NTI requires guidance_scale > 1")
     if not hasattr(model, "null_condition_emb"):

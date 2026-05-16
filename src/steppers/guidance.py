@@ -23,7 +23,6 @@ class _GuidanceCfgCore:
         self._forbid_decoder_kv_cache = False
 
     def set_forbid_decoder_kv_cache(self, forbid: bool) -> None:
-        """When True, CFG decoder uses no KV cache (needed for NTI per-layer torch.checkpoint)."""
         self._forbid_decoder_kv_cache = bool(forbid)
 
     def set_null_encoder_override(self, emb: torch.Tensor | None) -> None:
@@ -137,8 +136,6 @@ class _GuidanceCfgCore:
         device, dtype = x_b.device, x_b.dtype
         t_tensor = t_scalar * torch.ones((x2.shape[0],), device=device, dtype=dtype)
         use_cache_eff = use_cache and not self._forbid_decoder_kv_cache
-        # Cross-attention still mutates EncoderDecoderCache whenever it is non-None (see AceStepAttention:
-        # the cross path keys off past_key_value, not use_cache). Per-layer checkpoint requires no cache.
         pkv_for_decoder = past_key_values if use_cache_eff else None
         out = model.decoder(
             hidden_states=x2,
@@ -327,8 +324,6 @@ class UniHeunGuidanceStepper(GuidanceStepperHeun):
 
         old_pkv = model_condition.past_key_values
 
-        # 1) Heun velocity at current point:
-        # u_curr = H[v_guided](x_t, t_curr -> t_next)
         model_condition.past_key_values = None
         u_curr = super().step(
             model,
@@ -338,11 +333,8 @@ class UniHeunGuidanceStepper(GuidanceStepperHeun):
             model_condition=model_condition,
         ).v
 
-        # 2) Uni-Inv correction
         x_corr = x - dt * u_curr
 
-        # 3) Corrected velocity at predicted point.
-        # We use zero-length step to extract velocity at t_next.
         model_condition.past_key_values = None
         u_next = super().step(
             model,
@@ -352,7 +344,6 @@ class UniHeunGuidanceStepper(GuidanceStepperHeun):
             model_condition=model_condition,
         ).v
 
-        # 4) Uni update
         x_new = x - dt * u_next
 
         model_condition.past_key_values = old_pkv

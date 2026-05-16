@@ -12,12 +12,6 @@ from src.utils.conditioning import ModelCondition
 
 
 class OptStepper(BaseStepper):
-    """One ``init_stepper`` step, then optimize ``delta`` so ``opt_stepper`` with swapped time fits ``x``.
-
-    Returns ``x_init + delta`` (detached); ``v`` from the init step.
-    Inner optimization can add i.i.d. Gaussian noise (mean 0, variance ``reg_noise_variance``) to ``x_opt`` each step.
-    """
-
     def __init__(
         self,
         init_stepper: BaseStepper,
@@ -107,8 +101,6 @@ class OptStepper(BaseStepper):
             if m0 < self._epsilon:
                 return StepperPayload(x=x_init, v=v_out)
 
-        # Inversion / sampling often wraps the trajectory in ``torch.no_grad()``; re-enable
-        # autograd locally so ``loss`` depends on ``delta`` and ``backward`` works.
         with torch.enable_grad():
             delta = torch.zeros_like(x_init, requires_grad=True)
             r_scalar = float(

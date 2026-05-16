@@ -57,7 +57,7 @@ def _rebind_eager_in_acestep_modeling_modules() -> int:
             continue
         if not hasattr(mod, "eager_attention_forward"):
             continue
-        mod.eager_attention_forward = _instrumented_eager_attention_forward  # type: ignore[assignment]
+        mod.eager_attention_forward = _instrumented_eager_attention_forward
         n += 1
     return n
 
@@ -66,7 +66,7 @@ def rebind_eager_hook_for_decoder_submodule(obj: object) -> bool:
     mod_name = getattr(obj, "__class__", type(obj)).__module__
     m = sys.modules.get(mod_name)
     if m is not None and hasattr(m, "eager_attention_forward"):
-        m.eager_attention_forward = _instrumented_eager_attention_forward  # type: ignore[assignment]
+        m.eager_attention_forward = _instrumented_eager_attention_forward
         logger.debug("eager attention hook: re-bound {} (DiT class module)", mod_name)
         return True
     return False
@@ -76,9 +76,9 @@ def install_eager_attention_control_patch() -> None:
     with _patch_lock:
         try:
             import transformers.models.qwen3.modeling_qwen3 as m
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
-        m.eager_attention_forward = _instrumented_eager_attention_forward  # type: ignore[assignment]
+        m.eager_attention_forward = _instrumented_eager_attention_forward
         n_ace = _rebind_eager_in_acestep_modeling_modules()
         if n_ace:
             logger.info(

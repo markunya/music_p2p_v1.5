@@ -46,7 +46,7 @@ def apply_adg_mps_patch() -> None:
             else:
                 raise ValueError(f"sigma has incompatible shape. Expected scalar or size {n}, got {sigma.shape}")
         else:
-            raise TypeError(f"sigma must be a number or tensor, got {type(sigma)}")
+            raise ValueError(f"unsupported sigma type: {type(sigma)}")
 
         weight = guidance_scale - 1
         weight = weight * (weight > 0) + 1e-3

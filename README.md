@@ -12,7 +12,6 @@ Research codebase for **prompt-to-prompt (P2P) editing** and **diffusion inversi
 | ODE integrators | `src/configs/stepper/` | Euler, Heun, uni variants, CFG guidance, GCI inversion, OptStepper, UniEdit. |
 | Attention control | `src/configs/controller/` | Dummy (no-op), token replacement, reweight, PPAE map fusion. |
 | Null-text optimization | `src/configs/nti/` | Optional per-step null embedding optimization after inversion. |
-| Batch sweeps | `scripts/` | Sequential `edit_music.py` runs over tracks and hyperparameters. |
 
 Outputs land under `_exps/<save_dir>/<exp_name>/` (WAV, resolved config, optional Comet logs). Hydra run logs also go to `outputs/`.
 
@@ -42,7 +41,6 @@ Override any field from the CLI, e.g. `stepper=guidance_euler controller=ppae_re
 parent/
   ACE-Step-1.5/       # upstream (installed separately)
   music_p2p_v1.5/     # this repo
-  real_music/         # optional: *.mp3 for sweep scripts
 ```
 
 Set `acestep.project_root` in config or CLI if ACE-Step is not at `../ACE-Step-1.5` relative to this repo.
@@ -116,18 +114,6 @@ Writes `sample_0.wav` (source reconstruction) and `sample_1.wav` (target branch)
 - Run names must resolve to `gen_*`, `inv_*`, or `edit_*` (from `comet_run_prefix` in each entry config).
 - Each experiment directory is created once; reuse requires a new `exp_name=...`.
 
-## Sweep scripts
-
-From repo root:
-
-```bash
-python scripts/run_edit_music_sweeps.py
-python scripts/run_edit_music_nti_sweep.py
-python scripts/run_edit_music_gci_jeps_sweep.py
-```
-
-Audio is read from `<repo>/real_music` or `<repo>/../real_music`, or pass `--real-music-dir`. Use `--dry-run` to print commands only.
-
 ## Source layout
 
 | Path | Role |
@@ -137,4 +123,3 @@ Audio is read from `<repo>/real_music` or `<repo>/../real_music`, or pass `--rea
 | [`src/steppers/`](src/steppers/) | Integrator implementations |
 | [`src/attention_injection/`](src/attention_injection/) | Eager attention hook + controllers |
 | [`src/utils/`](src/utils/) | DiT init, conditioning, experiment dirs |
-| [`scripts/`](scripts/) | Batch experiment runners |

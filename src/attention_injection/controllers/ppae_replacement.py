@@ -8,7 +8,7 @@ from loguru import logger
 from omegaconf import DictConfig
 
 from src.attention_injection.controllers.base import AttentionControllerBase
-from src.attention_injection.injection_utils import infer_attention_head_query_key
+from src.utils.utils import infer_attention_head_query_key
 
 
 def alpha_ppae_fuser(

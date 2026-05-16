@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 
 import torch
-import torch.nn.functional as F
 from loguru import logger
 from omegaconf import OmegaConf
 
@@ -99,18 +98,6 @@ def _silent_target_wavs(handler: Any, batch_size: int, duration: float) -> torch
         device=handler.device,
         dtype=torch.float32,
     )
-
-
-def _pad_latent_time(lat: torch.Tensor, target_t: int) -> torch.Tensor:
-    if lat.dim() != 3:
-        raise ValueError(f"Expected latents [B, T, C], got shape {tuple(lat.shape)}")
-    _b, t, _c = lat.shape
-    if t == target_t:
-        return lat
-    if t > target_t:
-        return lat[:, :target_t].contiguous()
-    pad_len = target_t - t
-    return F.pad(lat, (0, 0, 0, pad_len))
 
 
 @torch.no_grad()

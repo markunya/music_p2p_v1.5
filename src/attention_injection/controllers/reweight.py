@@ -3,7 +3,7 @@ from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
 from src.attention_injection.controllers.base import AttentionControllerBase
-from src.attention_injection.injection_utils import infer_attention_head_query_key
+from src.utils.utils import infer_attention_head_query_key
 from src.utils.conditioning import (
     p2p_src_tgt_prompt_configs,
     prepare_conditions,

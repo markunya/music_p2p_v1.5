@@ -6,20 +6,11 @@ from src.attention_injection.tokenize import TextTokenizerLike, tokenize_caption
 from src.schemas import PromptConfig
 
 
-@dataclass
-class EncoderSegmentLayout:
-
-    lyric_slice: slice | None = None
-    timbre_slice: slice | None = None
-    text_slice: slice | None = None
-
-
 @dataclass(frozen=True)
 class AttentionInjectionBundle:
 
     lyrics: LyricReplacementMapper
     captions: CaptionsReplacementMapper
-    layout: EncoderSegmentLayout | None = None
     lyrics_mapping_text: str = ""
     captions_mapping_text: str = ""
 
@@ -157,7 +148,6 @@ def build_mappers(
     return AttentionInjectionBundle(
         lyrics=lyrics,
         captions=captions,
-        layout=None,
         lyrics_mapping_text=_mapper_lines(lyrics.matrix, ly_src_tok, ly_tgt_tok),
         captions_mapping_text=_mapper_lines(captions.matrix, cap_src_tok, cap_tgt_tok),
     )

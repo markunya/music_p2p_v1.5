@@ -49,35 +49,23 @@ def make_time_grid(n: int, device, dtype, ratio: float = 1.0) -> torch.Tensor:
     t = 1.0 - tau
     return t
 
-def make_time_grid_piecewise_dense_start(
-    n: int,
-    device,
-    dtype,
-    split_t: float = 0.6,
-    dense_frac: float = 0.7,
-) -> torch.Tensor:
-    if not (0.0 < split_t < 1.0):
-        raise ValueError("split_t must be in (0, 1)")
-    if not (0.0 < dense_frac < 1.0):
-        raise ValueError("dense_frac must be in (0, 1)")
-    if n < 2:
-        raise ValueError("n must be >= 2")
 
-    n_dense = int(round(n * dense_frac))
-    n_dense = max(1, min(n - 1, n_dense))
-    n_sparse = n - n_dense
+def infer_attention_head_query_key(x: torch.Tensor) -> tuple[int, int, int, int]:
+    if x.dim() == 4:
+        b, h, q, k = x.shape
+        return b, h, q, k
+    if x.dim() == 3:
+        h, q, k = x.shape
+        return 1, h, q, k
+    raise ValueError(f"expected attention tensor (B, H, Q, K) or (H, Q, K), got {tuple(x.shape)}")
 
-    t_dense = torch.linspace(1.0, split_t, n_dense + 1, device=device, dtype=dtype)
-    t_sparse = torch.linspace(split_t, 0.0, n_sparse + 1, device=device, dtype=dtype)
 
-    return torch.cat([t_dense[:-1], t_sparse], dim=0)
-
-def make_time_grid_edm(
-    n: int,
-    device,
-    dtype,
-    p: float = 1.3,
-) -> torch.Tensor:
-    u = torch.linspace(0.0, 1.0, n + 1, device=device, dtype=dtype)
-    t = 1.0 - u.pow(p)
-    return t
+def assert_row_stochastic(M: torch.Tensor, *, atol: float = 1e-5) -> None:
+    if M.dim() != 2:
+        raise ValueError(f"Expected 2D matrix, got shape {tuple(M.shape)}")
+    if (M < -atol).any():
+        raise ValueError("Matrix contains negative entries")
+    sums = M.sum(dim=-1)
+    if not torch.allclose(sums, torch.ones_like(sums), atol=atol, rtol=0.0):
+        bad = (sums - 1.0).abs().max().item()
+        raise ValueError(f"Rows do not sum to 1 (max deviation {bad})")

@@ -3,7 +3,7 @@ from typing import Tuple
 
 import torch
 
-from src.attention_injection.validate import assert_row_stochastic
+from src.utils.utils import assert_row_stochastic
 
 
 class InjectionMapper(ABC):

@@ -3,8 +3,9 @@ from omegaconf import DictConfig
 
 from src.attention_injection.bundle import build_mappers
 from src.attention_injection.controllers.base import AttentionControllerBase
-from src.attention_injection.injection_utils import infer_attention_head_query_key
-from src.attention_injection.mappers import CaptionsReplacementMapper, LyricReplacementMapper
+from src.utils.utils import infer_attention_head_query_key
+from src.attention_injection.mappers.captions import CaptionsReplacementMapper
+from src.attention_injection.mappers.lyrics import LyricReplacementMapper
 from src.utils.conditioning import p2p_src_tgt_prompt_configs, prepare_conditions
 
 

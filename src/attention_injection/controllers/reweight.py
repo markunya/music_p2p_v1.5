@@ -82,31 +82,49 @@ class ReweightAttentionController(AttentionControllerBase):
                 "ReweightAttentionController.build: reweight_strength=1.0 on masked keys means no change."
             )
 
+    def _cond_batch_indices(self, attn_batch: int) -> list[int]:
+        eq_b = int(self._equalizer.shape[0]) if self._equalizer is not None else 0
+        if attn_batch == eq_b:
+            return list(range(attn_batch))
+        if attn_batch == 4 and eq_b == 2:
+            return [0, 1]
+        raise ValueError(
+            f"equalizer batch {eq_b} incompatible with attention batch {attn_batch} "
+            f"(expected {eq_b} or 4 with cond-only equalizer)"
+        )
+
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:
         w = attn_weight
         b, _, _, k = infer_attention_head_query_key(w)
         if self._equalizer is None:
             return w
-        if self._equalizer.shape != (b, k):
-            raise ValueError(f"equalizer shape {(b, k)} expected, got {tuple(self._equalizer.shape)}")
+        if self._equalizer.shape[1] != k:
+            raise ValueError(f"equalizer K={k} expected, got {self._equalizer.shape[1]}")
 
-        m = self._equalizer.to(device=w.device, dtype=w.dtype)
-        if w.dim() == 4:
-            m = m.view(b, 1, 1, k)
-        else:
-            m = m.view(b, 1, k)
+        cond_indices = self._cond_batch_indices(b)
+        eq = self._equalizer.to(device=w.device, dtype=w.dtype)
+        out = w.clone()
+        for row_i, batch_i in enumerate(cond_indices):
+            m = eq[row_i]
+            if w.dim() == 4:
+                m = m.view(1, 1, 1, k)
+            else:
+                m = m.view(1, 1, k)
+            out[batch_i] = w[batch_i] * m
 
-        out = w * m
         self._n_forward += 1
         if self._n_forward == 1:
-            w_abs_mean = w.detach().abs().mean().clamp_min(1e-12)
-            delta = (out - w).detach().abs().mean()
-            k_mass = out.detach().sum(dim=-1).float().mean().item()
+            w_cond = w[cond_indices]
+            out_cond = out[cond_indices]
+            w_abs_mean = w_cond.detach().abs().mean().clamp_min(1e-12)
+            delta = (out_cond - w_cond).detach().abs().mean()
+            k_mass = out_cond.detach().sum(dim=-1).float().mean().item()
             rel = (delta / w_abs_mean).item()
             logger.info(
-                "ReweightAttentionController: first cross-attn apply | w.shape={} "
+                "ReweightAttentionController: first cross-attn apply | w.shape={} cond_rows={} "
                 "mean|Δattn|/mean|w|={:.4g} post_mul mean(sum_K)={:.4g} (softmax was ~1.0 per row)",
                 tuple(w.shape),
+                cond_indices,
                 rel,
                 k_mass,
             )

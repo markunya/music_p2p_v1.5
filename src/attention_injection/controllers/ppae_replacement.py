@@ -11,23 +11,6 @@ from src.attention_injection.controllers.base import AttentionControllerBase
 from src.utils.utils import infer_attention_head_query_key
 
 
-def alpha_ppae_fuser(
-    t: float,
-    t_s: float,
-    t_e: float,
-    eta_min: float,
-    eta_max: float,
-) -> float | None:
-    if t < t_e or t > t_s:
-        return None
-    span = t_s - t_e
-    if span <= 0.0:
-        raise ValueError(f"ppae fuser: need t_s > t_e, got t_s={t_s}, t_e={t_e}")
-    p = (t_s - t) / span
-    p = min(1.0, max(0.0, float(p)))
-    return float(eta_min + 0.5 * (eta_max - eta_min) * (1.0 - math.cos(math.pi * p)))
-
-
 class PPAEReplacementController(AttentionControllerBase):
     def __init__(
         self,
@@ -72,6 +55,16 @@ class PPAEReplacementController(AttentionControllerBase):
             self._eta_max,
         )
 
+    def fuser(self, t: float) -> float | None:
+        if t < self._t_e or t > self._t_s:
+            return None
+        p = (self._t_s - t) / (self._t_s - self._t_e)
+        p = min(1.0, max(0.0, float(p)))
+        return float(
+            self._eta_min
+            + 0.5 * (self._eta_max - self._eta_min) * (1.0 - math.cos(math.pi * p))
+        )
+
     def forward(self, attn_weight: torch.Tensor) -> torch.Tensor:
         if not self._built:
             logger.warning("PPAEReplacementController.forward: build() was not called; pass-through")
@@ -93,7 +86,7 @@ class PPAEReplacementController(AttentionControllerBase):
             return attn_weight
         t = float(raw_t)
 
-        alpha = alpha_ppae_fuser(t, self._t_s, self._t_e, self._eta_min, self._eta_max)
+        alpha = self.fuser(t)
         out = attn_weight.clone()
 
         def _apply_pair(src_row: torch.Tensor, tgt_row: torch.Tensor) -> torch.Tensor:
@@ -102,9 +95,5 @@ class PPAEReplacementController(AttentionControllerBase):
             a = torch.as_tensor(alpha, device=attn_weight.device, dtype=torch.float32)
             return (a * tgt_row.float() + (1.0 - a) * src_row.float()).to(dtype=out.dtype)
 
-        if b == 2:
-            out[1] = _apply_pair(out[0], out[1])
-        else:
-            out[1] = _apply_pair(out[0], out[1])
-            out[3] = _apply_pair(out[2], out[3])
+        out[1] = _apply_pair(out[0], out[1])
         return out

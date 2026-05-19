@@ -2,6 +2,8 @@
 
 Research codebase for **prompt-to-prompt (P2P) editing** and **diffusion inversion** on top of [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). Hydra drives all experiments; entry points are `generate.py`, `invert_music.py`, and `edit_music.py`.
 
+**Demo:** audio examples of P2P edits (source vs. edited) are on the [interactive demo page](https://markunya.github.io/music_p2p_v1.5/demo.html).
+
 ## What this repo does
 
 | Capability | Entry / config | Description |

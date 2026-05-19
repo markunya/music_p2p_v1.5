@@ -112,6 +112,75 @@
       margin-top: 18px;
     }
 
+    .example-note {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .comparison-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .comparison-3 .side + .side {
+      border-left: 1px solid var(--line);
+    }
+
+    .reweight-visual {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 160px;
+      padding: 28px 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.035);
+      text-align: center;
+    }
+
+    .reweight-visual--neutral .instrument {
+      color: #eef2f7;
+    }
+
+    .instrument {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+
+    .reweight-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      border-radius: 999px;
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .reweight-arrow--down {
+      color: #ffb4b4;
+      background: rgba(255, 120, 120, 0.14);
+      border: 1px solid rgba(255, 140, 140, 0.28);
+    }
+
+    .reweight-arrow--up {
+      color: #9dffc7;
+      background: rgba(80, 220, 150, 0.14);
+      border: 1px solid rgba(100, 230, 160, 0.28);
+    }
+
+    .reweight-caption {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     @media (max-width: 820px) {
       .page {
         width: min(100% - 20px, 1120px);
@@ -133,6 +202,15 @@
 
       .prompt-box {
         min-height: auto;
+      }
+
+      .comparison-3 {
+        grid-template-columns: 1fr;
+      }
+
+      .comparison-3 .side + .side {
+        border-left: none;
+        border-top: 1px solid var(--line);
       }
     }
   </style>
@@ -279,6 +357,47 @@ The clock is licking, soufflé</pre>
           </div>
 
           <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/lyricrep_stay_tgt.wav"></audio>
+        </article>
+      </div>
+    </section>
+
+    <section class="example" id="reweight-dkw">
+      <div class="example-title">
+        <h2>Example 4 — Caption reweight (Don't Know Why)</h2>
+        <p class="example-note">
+          Same lyrics and arrangement; only the marked caption tag <strong>acoustic piano-led arrangement</strong> is down- or up-weighted.
+          The effect is easiest to hear between <strong>4&nbsp;s</strong> and <strong>10&nbsp;s</strong>.
+        </p>
+      </div>
+
+      <div class="comparison comparison-3">
+        <article class="side">
+          <h3>Original</h3>
+          <div class="reweight-visual reweight-visual--neutral">
+            <span class="instrument">Source mix</span>
+            <p class="reweight-caption">Unedited reconstruction</p>
+          </div>
+          <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweigth_dkw_src.wav"></audio>
+        </article>
+
+        <article class="side">
+          <h3>Weaken</h3>
+          <div class="reweight-visual">
+            <span class="instrument">Piano</span>
+            <span class="reweight-arrow reweight-arrow--down" aria-hidden="true">↓</span>
+            <p class="reweight-caption">Tag marked for down-weighting</p>
+          </div>
+          <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweight_dkw_-piano.wav"></audio>
+        </article>
+
+        <article class="side">
+          <h3>Strengthen</h3>
+          <div class="reweight-visual">
+            <span class="instrument">Piano</span>
+            <span class="reweight-arrow reweight-arrow--up" aria-hidden="true">↑</span>
+            <p class="reweight-caption">Tag marked for up-weighting</p>
+          </div>
+          <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweight_dkw_+piano.wav"></audio>
         </article>
       </div>
     </section>

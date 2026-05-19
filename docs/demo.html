@@ -119,11 +119,20 @@
       line-height: 1.5;
     }
 
+    .comparison-2,
     .comparison-3 {
       display: grid;
+    }
+
+    .comparison-2 {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .comparison-3 {
       grid-template-columns: repeat(3, 1fr);
     }
 
+    .comparison-2 .side + .side,
     .comparison-3 .side + .side {
       border-left: 1px solid var(--line);
     }
@@ -204,10 +213,12 @@
         min-height: auto;
       }
 
+      .comparison-2,
       .comparison-3 {
         grid-template-columns: 1fr;
       }
 
+      .comparison-2 .side + .side,
       .comparison-3 .side + .side {
         border-left: none;
         border-top: 1px solid var(--line);
@@ -398,6 +409,37 @@ The clock is licking, soufflé</pre>
             <p class="reweight-caption">Tag marked for up-weighting</p>
           </div>
           <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweigith_dkw_%2Bpiano.wav"></audio>
+        </article>
+      </div>
+    </section>
+
+    <section class="example" id="reweight-stay">
+      <div class="example-title">
+        <h2>Example 5 — Caption reweight (Stay)</h2>
+        <p class="example-note">
+          Same lyrics and arrangement; only the marked caption tag <strong>deep synth bass</strong> is up-weighted.
+          The low-frequency boost is easiest to hear from <strong>0&nbsp;s</strong> to <strong>7&nbsp;s</strong>.
+        </p>
+      </div>
+
+      <div class="comparison comparison-2">
+        <article class="side">
+          <h3>Original</h3>
+          <div class="reweight-visual reweight-visual--neutral">
+            <span class="instrument">Source mix</span>
+            <p class="reweight-caption">Unedited reconstruction</p>
+          </div>
+          <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweight_stay_src.wav"></audio>
+        </article>
+
+        <article class="side">
+          <h3>Strengthen</h3>
+          <div class="reweight-visual">
+            <span class="instrument">Bass</span>
+            <span class="reweight-arrow reweight-arrow--up" aria-hidden="true">↑</span>
+            <p class="reweight-caption">Tag marked for up-weighting</p>
+          </div>
+          <audio controls preload="metadata" src="https://huggingface.co/datasets/markunya/music_p2p_samples/resolve/main/reweight_stay_%2Bbass.wav"></audio>
         </article>
       </div>
     </section>
